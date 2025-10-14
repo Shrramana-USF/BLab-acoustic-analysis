@@ -1,0 +1,12 @@
+numpy
+pandas
+matplotlib
+soundfile
+praat-parselmouth
+streamlit
+streamlit-audiorec
+streamlit-advanced-audio
+openpyxl
+box_sdk_gen
+streamlit_authenticator
+Authlib

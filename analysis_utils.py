@@ -250,11 +250,19 @@ def intensity_contour(intensity):
 
 def compute_cpp(snd: pm.Sound) -> float | None:
     """Compute CPP (Cepstral Peak Prominence Smoothed) from an existing Praat Sound object."""
+    # Pitch Ceiling 300 as per the ADSV app setting
     try:
+        # pc = praat_call(
+        #     snd, "To PowerCepstrogram", PITCH_FLOOR, 0.002, PITCH_CEILING, 50.0)
         pc = praat_call(
-            snd, "To PowerCepstrogram", PITCH_FLOOR, 0.002, PITCH_CEILING, 50.0)
+            snd, "To PowerCepstrogram", PITCH_FLOOR, 0.002, 300, 50.0)
+
+        # cpp = praat_call(
+        #     pc, "Get CPPS", "yes", 0.02, 0.0005, PITCH_FLOOR, PITCH_CEILING,
+        #     0.05,   # tolerance 
+        #     "parabolic", 0.001,0.05, "Exponential decay", "Robust slow")
         cpp = praat_call(
-            pc, "Get CPPS", "yes", 0.02, 0.0005, PITCH_FLOOR, PITCH_CEILING,
+            pc, "Get CPPS", "no", 0.02, 0.0005, PITCH_FLOOR, 300,
             0.05,   # tolerance 
             "parabolic", 0.001,0.05, "Exponential decay", "Robust slow")
         return float(cpp)
@@ -295,6 +303,8 @@ def summarize_features(snd: pm.Sound, pitch, intensity):
     f0 = estimate_f0_praat(pitch)
     features["Fundamental Freq (Hz)"] = f"{f0:.2f}" if f0 is not None else "—"
 
+    features["Audio duration"] = f"{snd.get_total_duration():.2f}"
+
     # Jitter/Shimmer
     try:
         js = jitter_shimmer(snd, pitch)
@@ -307,19 +317,26 @@ def summarize_features(snd: pm.Sound, pitch, intensity):
 
     # Pitch contour stats
     xs, f0_contour = pitch_contour(pitch)
+
+    pitch_values = pitch.selected_array['frequency']
+    
     if np.any(~np.isnan(f0_contour)):
         features["Pitch Mean (Hz)"] = f"{np.nanmean(f0_contour):.2f}"
-        features["Pitch Median (Hz)"] = f"{np.nanmedian(f0_contour):.2f}"
+        # features["Pitch Median (Hz)"] = f"{np.nanmedian(f0_contour):.2f}"
         features["Pitch Min (Hz)"] = f"{np.nanmin(f0_contour):.2f}"
+        # features["Pitch Max (Hz1)"] = pitch_values.max()
         features["Pitch Max (Hz)"] = f"{np.nanmax(f0_contour):.2f}"
+        features["Pitch Range (Hz)"] = f"{float(features['Pitch Max (Hz)']) - float(features['Pitch Min (Hz)']):.2f}"
 
-    # Intensity contour stats
+
+    # Intensity contour stats ----- Changed to Energy
     xs, inten_contour = intensity_contour(intensity)
     if len(inten_contour) > 0:
-        features["Intensity Mean (dB)"] = f"{np.mean(inten_contour):.2f}"
-        features["Intensity Median (dB)"] = f"{np.median(inten_contour):.2f}"
-        features["Intensity Min (dB)"] = f"{np.min(inten_contour):.2f}"
-        features["Intensity Max (dB)"] = f"{np.max(inten_contour):.2f}"
+        features["Energy Mean (dB)"] = f"{np.mean(inten_contour):.2f}"
+        # features["Intensity Median (dB)"] = f"{np.median(inten_contour):.2f}"
+        features["Energy Min (dB)"] = f"{np.min(inten_contour):.2f}"
+        features["Energy Max (dB)"] = f"{np.max(inten_contour):.2f}"
+        features["Energy Range (dB)"] = f"{float(features["Energy Max (dB)"]) - float(features["Energy Min (dB)"]):.2f}"
 
     # CPP
     cpp_val = compute_cpp(snd)

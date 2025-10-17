@@ -81,7 +81,7 @@ def record_tab(folder_id):
 
             if y_region is not None and len(y_region) > 0:
                 snd = pm.Sound(y_region, sampling_frequency=sr)
-                pitch = snd.to_pitch(time_step=None,pitch_floor=2,pitch_ceiling=5000)
+                pitch = snd.to_pitch(time_step=None,pitch_floor=10,pitch_ceiling=5000)
                 intensity = snd.to_intensity()
 
                 f0 = estimate_f0_praat(pitch)

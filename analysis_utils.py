@@ -328,6 +328,7 @@ def summarize_features(snd: pm.Sound, pitch, intensity):
         # features["Pitch Max (Hz1)"] = pitch_values.max()
         features["Pitch Max (Hz)"] = f"{np.nanmax(f0_contour):.2f}"
         features["Pitch Range (Hz)"] = f"{float(features['Pitch Max (Hz)']) - float(features['Pitch Min (Hz)']):.2f}"
+        features["Octave"] = f"{math.log2(float(features['Pitch Max (Hz)']) / float(features['Pitch Min (Hz)'])):.2f}"
 
 
     # Intensity contour stats ----- Changed to Energy
@@ -338,7 +339,7 @@ def summarize_features(snd: pm.Sound, pitch, intensity):
         features["Energy Min (dB)"] = f"{np.min(inten_contour):.2f}"
         features["Energy Max (dB)"] = f"{np.max(inten_contour):.2f}"
         features["Energy Range (dB)"] = f"{float(features["Energy Max (dB)"]) - float(features["Energy Min (dB)"]):.2f}"
-        features["Octave"] = f"{math.log2(float(features["Energy Max (dB)"])/float(features["Energy Min (dB)"])):.2f}"
+        
 
     # CPP
     cpp_val = compute_cpp(snd)

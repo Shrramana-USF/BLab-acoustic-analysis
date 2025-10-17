@@ -15,7 +15,10 @@ def upload_tab(folder_id):
     st.subheader("Upload Audio for Task")
 
     # --- Step 1: Task Selection ---
-    tasks = ["MPT", "Rainbow passage", "Comfortable sustained", "Glide Up", "Glide Down", "Capev"]
+    tasks = [ "Rainbow passage", "Maximum sustained phonation on 'aaah'", "Comfortable sustained phonation on 'eeee'", 
+             "Glide up to your highest pitch on 'eeee'", "Glide down to your lowest pitch on 'eeee'", 
+             "Sustained 'aaah' at minimum volume", "Maximum loudness level (brief 'AAAH')", "Conversational speech"]
+    
     selected_task = st.radio(
         "Select a task to continue:",
         options=tasks,

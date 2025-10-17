@@ -20,7 +20,7 @@ def audio_saver_tab(folder_id):
     Allows cutting and saving audio segments.
     """
 
-    st.subheader("💾 Audio Saver — Segment and Save Incoming Files")
+    st.subheader("Audio Saver — Segment and Save Incoming Files")
 
     # --- Inputs from PyQt5 or manual entry ---
     date = st.text_input("Recording Date (YYYY-MM-DD)")

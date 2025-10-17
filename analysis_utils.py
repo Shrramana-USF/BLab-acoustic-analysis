@@ -4,6 +4,7 @@ import tempfile
 import numpy as np
 import pandas as pd
 import soundfile as sf
+import math
 import parselmouth as pm
 import matplotlib.pyplot as plt
 from parselmouth.praat import call as praat_call
@@ -337,6 +338,7 @@ def summarize_features(snd: pm.Sound, pitch, intensity):
         features["Energy Min (dB)"] = f"{np.min(inten_contour):.2f}"
         features["Energy Max (dB)"] = f"{np.max(inten_contour):.2f}"
         features["Energy Range (dB)"] = f"{float(features["Energy Max (dB)"]) - float(features["Energy Min (dB)"]):.2f}"
+        features["Octave"] = f"{math.log2(float(features["Energy Max (dB)"])/float(features["Energy Min (dB)"])):.2f}"
 
     # CPP
     cpp_val = compute_cpp(snd)

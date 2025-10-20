@@ -27,8 +27,6 @@ TASKS = [
 ]
 
 
-# ----------------- Utility functions -----------------
-
 def estimate_f0_praat(pitch):
     pitch_values = pitch.selected_array["frequency"]
     pitch_values = pitch_values[pitch_values != 0]
@@ -77,9 +75,6 @@ def plot_spectrogram(spectrogram):
 
 
 def fetch_file_from_box(client, folder_id, filename):
-    """
-    Look for a file by name in a Box folder and return its bytes.
-    """
     folder_items = client.folders.get_folder_items(str(folder_id))
     file_item = next((f for f in folder_items.entries if f.type == "file" and f.name == filename), None)
     if not file_item:
@@ -89,9 +84,6 @@ def fetch_file_from_box(client, folder_id, filename):
 
 
 def report_exists_in_box(client, folder_id, date, task):
-    """
-    Check if a report (CSV or plots) already exists for the given date and task.
-    """
     expected_names = [
         f"{date}_{task}_features.csv",
         f"{date}_{task}_pitch.png",
@@ -107,16 +99,7 @@ def report_exists_in_box(client, folder_id, date, task):
         return False
 
 
-# ----------------- Main Streamlit Tab -----------------
-
 def split_audio_report_tab(folder_id):
-    """
-    Split Audio Report Tab
-    Loads saved audio segments from Box,
-    plays them in Streamlit, extracts features and plots,
-    and saves results to Box (unless report already exists).
-    """
-
     st.subheader("Split Audio Report")
 
     pid = st.text_input("PID (Unique Patient/Session ID)", key="split_pid")
@@ -140,7 +123,6 @@ def split_audio_report_tab(folder_id):
         st.error(f"Could not find or load audio file: {e}")
         return
 
-    # Display simple player for playback
     st.info("Loaded audio file for playback and analysis:")
     st.audio(audio_bytes, format="audio/wav")
 
@@ -163,12 +145,12 @@ def split_audio_report_tab(folder_id):
                     st.warning("No stable fundamental frequency detected.")
                     return
 
-                # Feature summary
+                # --- Compute features and show table ---
                 features = summarize_features(snd, pitch, intensity)
                 df = pd.DataFrame(list(features.items()), columns=["Feature", "Value"])
                 st.dataframe(df, width="stretch", hide_index=True)
 
-                # Plots
+                # --- Generate plots and show them ---
                 xs, f0_contour = pitch_contour(pitch)
                 fig_pitch, ax = plt.subplots()
                 ax.plot(xs, f0_contour, color="blue")
@@ -185,10 +167,10 @@ def split_audio_report_tab(folder_id):
                 fig_spec = plot_spectrogram(spectrogram)
                 st.pyplot(fig_spec)
 
-                # Save if report does not already exist
+                # --- Save only if report not already in Box ---
                 if report_exists_in_box(client, task_folder_id, date, task):
-                    st.warning(f"A report already exists for this session ({date} — {task}).")
-                    st.info("Analysis completed but results were not saved again.")
+                    st.warning(f"A report already exists for {date} — {task}.")
+                    st.info("Analysis completed successfully, but results were not saved again.")
                 else:
                     csv_buf = io.StringIO()
                     df.to_csv(csv_buf, index=False)
@@ -207,5 +189,6 @@ def split_audio_report_tab(folder_id):
                     upload_to_user_box(client, task_folder_id, f"{date}_{task}_spectrogram.png", img_buf.getvalue())
 
                     st.success("Features and plots saved to Box successfully.")
+
             except Exception as e:
                 st.error(f"Feature extraction failed: {e}")

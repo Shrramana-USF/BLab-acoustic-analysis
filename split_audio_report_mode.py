@@ -10,6 +10,7 @@ from streamlit_advanced_audio import audix
 
 from analysis_utils import (
     get_box_client,
+    BASE_FOLDER_ID,
     ensure_task_folder,
     upload_to_user_box,
     summarize_features,
@@ -85,7 +86,7 @@ def report_exists_in_box(client, folder_id, date, task):
         return False
 
 
-def split_audio_report_tab(folder_id):
+def split_audio_report_tab(_):
     st.subheader("Split Audio Report")
 
     recorder_email = st.text_input("Recorder Email ID", key="split_recorder_email")
@@ -99,14 +100,12 @@ def split_audio_report_tab(folder_id):
 
     client = get_box_client()
 
-    # --- Folder hierarchy: base -> recorder -> PID -> task ---
-    recorder_folder_id = ensure_task_folder(client, folder_id, recorder_email)
+    # ✅ Always start from BASE_FOLDER_ID (global root)
+    recorder_folder_id = ensure_task_folder(client, BASE_FOLDER_ID, recorder_email)
     pid_folder_id = ensure_task_folder(client, recorder_folder_id, pid)
     task_folder_id = ensure_task_folder(client, pid_folder_id, task)
 
     filename = f"{date}_{task}.wav"
-
-    st.write(f"Loading file from Box: {client}")
 
     st.write(f"Loading file from Box: {recorder_email}/{pid}/{task}/{filename}")
 
@@ -139,12 +138,10 @@ def split_audio_report_tab(folder_id):
                     st.warning("No stable fundamental frequency detected.")
                     return
 
-                # --- Compute and display features ---
                 features = summarize_features(snd, pitch, intensity)
                 df = pd.DataFrame(list(features.items()), columns=["Feature", "Value"])
                 st.dataframe(df, width="stretch", hide_index=True)
 
-                # --- Plots ---
                 xs, f0_contour = pitch_contour(pitch)
                 fig_pitch, ax = plt.subplots()
                 ax.plot(xs, f0_contour, color="blue")
@@ -161,13 +158,12 @@ def split_audio_report_tab(folder_id):
                 fig_spec = plot_spectrogram(spectrogram)
                 st.pyplot(fig_spec)
 
-                # --- Check if report already exists ---
                 if report_exists_in_box(client, task_folder_id, date, task):
                     st.warning(f"A report already exists for {date} — {task}.")
                     st.info("Analysis completed successfully, results are not saved again.")
                     return
 
-                # --- Save to Box ---
+                # --- Save files ---
                 csv_buf = io.StringIO()
                 df.to_csv(csv_buf, index=False)
                 upload_to_user_box(client, task_folder_id, f"{date}_{task}_features.csv", csv_buf.getvalue().encode("utf-8"))

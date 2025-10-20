@@ -102,9 +102,10 @@ def split_audio_report_tab(folder_id):
 
     st.subheader("Split Audio Report — Analyze Audio Segments")
 
-    pid = st.text_input("PID (Unique Patient/Session ID)")
-    date = st.text_input("Session Date (YYYY-MM-DD)")
-    task = st.selectbox("Select Task", TASKS)
+    pid = st.text_input("PID (Unique Patient/Session ID)", key="split_pid")
+    date = st.text_input("Session Date (YYYY-MM-DD)", key="split_date")
+    task = st.selectbox("Select Task", TASKS, key="split_task")
+
 
     if not (pid and date and task):
         st.info("Please fill in all fields to continue.")

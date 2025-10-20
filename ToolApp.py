@@ -5,11 +5,13 @@ from box_sdk_gen import BoxClient, BoxDeveloperTokenAuth
 from box_sdk_gen.managers.uploads import UploadFileAttributes, UploadFileAttributesParentField, UploadFileVersionAttributes
 from box_sdk_gen.internal.utils import read_byte_stream
 
+
 # Import tabs (modes)
 from upload_mode import upload_tab
 from record_mode import record_tab
 from report_mode import report_tab
 from audio_saver_mode import audio_saver_tab
+from split_audio_report_mode import split_audio_report_tab
 
 
 # Import utilities
@@ -44,7 +46,14 @@ if st.button("Log out"):
 st.warning("DO NOT FORGET TO LOGOUT!")
 
 # ---------------- MODE TABS ----------------
-tab1, tab2, tab3, tab4 = st.tabs(["📤 Upload", "🎧 Record", "📊 Report", "💾 Audio Saver"])
+
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+    "📤 Upload",
+    "🎧 Record",
+    "📊 Report",
+    "💾 Audio Saver",
+    "📈 Split Audio Report"
+])
 
 with tab1:
     upload_tab(folder_id)
@@ -54,4 +63,5 @@ with tab3:
     report_tab(folder_id)
 with tab4:
     audio_saver_tab(folder_id)
-
+with tab5:
+    split_audio_report_tab(folder_id)

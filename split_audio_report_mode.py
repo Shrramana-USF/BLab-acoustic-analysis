@@ -27,6 +27,8 @@ TASKS = [
 ]
 
 
+# ----------------- Utility functions -----------------
+
 def estimate_f0_praat(pitch):
     pitch_values = pitch.selected_array["frequency"]
     pitch_values = pitch_values[pitch_values != 0]
@@ -77,24 +79,42 @@ def plot_spectrogram(spectrogram):
 def fetch_file_from_box(client, folder_id, filename):
     """
     Look for a file by name in a Box folder and return its bytes.
-    Uses your Box wrapper methods.
     """
     folder_items = client.folders.get_folder_items(str(folder_id))
     file_item = next((f for f in folder_items.entries if f.type == "file" and f.name == filename), None)
-
     if not file_item:
         raise FileNotFoundError(f"File '{filename}' not found in folder {folder_id}")
-
     byte_stream = client.downloads.download_file(file_item.id)
     return read_byte_stream(byte_stream)
 
+
+def report_exists_in_box(client, folder_id, date, task):
+    """
+    Check if a report (CSV or plots) already exists for the given date and task.
+    """
+    expected_names = [
+        f"{date}_{task}_features.csv",
+        f"{date}_{task}_pitch.png",
+        f"{date}_{task}_intensity.png",
+        f"{date}_{task}_spectrogram.png",
+    ]
+    try:
+        items = client.folders.get_folder_items(str(folder_id))
+        existing_names = [f.name for f in items.entries if f.type == "file"]
+        return any(name in existing_names for name in expected_names)
+    except Exception as e:
+        st.warning(f"Could not verify report existence: {e}")
+        return False
+
+
+# ----------------- Main Streamlit Tab -----------------
 
 def split_audio_report_tab(folder_id):
     """
     Split Audio Report Tab
     Loads saved audio segments from Box,
-    displays waveform using advanced audio widget,
-    extracts and saves audio features and plots.
+    plays them in Streamlit, extracts features and plots,
+    and saves results to Box (if not already existing).
     """
 
     st.subheader("Split Audio Report")
@@ -120,17 +140,21 @@ def split_audio_report_tab(folder_id):
         st.error(f"Could not find or load audio file: {e}")
         return
 
-    # Display waveform with advanced audio player
-    # Simple audio player for playback
+    # Display simple player for playback
     st.info("Loaded audio file for playback and analysis:")
     st.audio(audio_bytes, format="audio/wav")
-
 
     try:
         y, sr = sf.read(io.BytesIO(audio_bytes))
         st.caption(f"Loaded {filename} — Duration: {len(y)/sr:.2f}s, SR: {sr}Hz")
     except Exception as e:
         st.error(f"Error reading audio: {e}")
+        return
+
+    # If a report already exists, warn and skip saving
+    if report_exists_in_box(client, task_folder_id, date, task):
+        st.warning(f"A report already exists for this session ({date} — {task}).")
+        st.info("You can view it in the Box folder or Reports tab.")
         return
 
     if st.button("Extract and Save Features"):

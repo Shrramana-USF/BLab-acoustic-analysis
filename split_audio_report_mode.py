@@ -130,7 +130,7 @@ def split_audio_report_tab(_):
         with st.spinner("Analyzing audio... please wait"):
             try:
                 snd = pm.Sound(y, sampling_frequency=sr)
-                pitch = snd.to_pitch(time_step=None, pitch_floor=10, pitch_ceiling=5000)
+                pitch = snd.to_pitch(time_step=None, pitch_floor=2, pitch_ceiling=500)
                 intensity = snd.to_intensity()
 
                 f0 = estimate_f0_praat(pitch)

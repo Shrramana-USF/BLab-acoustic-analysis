@@ -170,7 +170,7 @@ def split_audio_report_tab(folder_id):
                 # --- Save only if report not already in Box ---
                 if report_exists_in_box(client, task_folder_id, date, task):
                     st.warning(f"A report already exists for {date} — {task}.")
-                    st.info("Analysis completed successfully, but results were not saved again.")
+                    st.info("Analysis completed successfully, results are not saved again.")
                 else:
                     csv_buf = io.StringIO()
                     df.to_csv(csv_buf, index=False)

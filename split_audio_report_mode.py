@@ -114,7 +114,7 @@ def split_audio_report_tab(folder_id):
     Split Audio Report Tab
     Loads saved audio segments from Box,
     plays them in Streamlit, extracts features and plots,
-    and saves results to Box (if not already existing).
+    and saves results to Box (unless report already exists).
     """
 
     st.subheader("Split Audio Report")
@@ -151,12 +151,6 @@ def split_audio_report_tab(folder_id):
         st.error(f"Error reading audio: {e}")
         return
 
-    # If a report already exists, warn and skip saving
-    if report_exists_in_box(client, task_folder_id, date, task):
-        st.warning(f"A report already exists for this session ({date} — {task}).")
-        st.info("You can view it in the Box folder or Reports tab.")
-        return
-
     if st.button("Extract and Save Features"):
         with st.spinner("Analyzing audio... please wait"):
             try:
@@ -169,11 +163,12 @@ def split_audio_report_tab(folder_id):
                     st.warning("No stable fundamental frequency detected.")
                     return
 
+                # Feature summary
                 features = summarize_features(snd, pitch, intensity)
                 df = pd.DataFrame(list(features.items()), columns=["Feature", "Value"])
                 st.dataframe(df, width="stretch", hide_index=True)
 
-                # Generate plots
+                # Plots
                 xs, f0_contour = pitch_contour(pitch)
                 fig_pitch, ax = plt.subplots()
                 ax.plot(xs, f0_contour, color="blue")
@@ -190,23 +185,27 @@ def split_audio_report_tab(folder_id):
                 fig_spec = plot_spectrogram(spectrogram)
                 st.pyplot(fig_spec)
 
-                # Save to Box
-                csv_buf = io.StringIO()
-                df.to_csv(csv_buf, index=False)
-                upload_to_user_box(client, task_folder_id, f"{date}_{task}_features.csv", csv_buf.getvalue().encode("utf-8"))
+                # Save if report does not already exist
+                if report_exists_in_box(client, task_folder_id, date, task):
+                    st.warning(f"A report already exists for this session ({date} — {task}).")
+                    st.info("Analysis completed but results were not saved again.")
+                else:
+                    csv_buf = io.StringIO()
+                    df.to_csv(csv_buf, index=False)
+                    upload_to_user_box(client, task_folder_id, f"{date}_{task}_features.csv", csv_buf.getvalue().encode("utf-8"))
 
-                img_buf = io.BytesIO()
-                fig_pitch.savefig(img_buf, format="png"); img_buf.seek(0)
-                upload_to_user_box(client, task_folder_id, f"{date}_{task}_pitch.png", img_buf.getvalue())
+                    img_buf = io.BytesIO()
+                    fig_pitch.savefig(img_buf, format="png"); img_buf.seek(0)
+                    upload_to_user_box(client, task_folder_id, f"{date}_{task}_pitch.png", img_buf.getvalue())
 
-                img_buf = io.BytesIO()
-                fig_intensity.savefig(img_buf, format="png"); img_buf.seek(0)
-                upload_to_user_box(client, task_folder_id, f"{date}_{task}_intensity.png", img_buf.getvalue())
+                    img_buf = io.BytesIO()
+                    fig_intensity.savefig(img_buf, format="png"); img_buf.seek(0)
+                    upload_to_user_box(client, task_folder_id, f"{date}_{task}_intensity.png", img_buf.getvalue())
 
-                img_buf = io.BytesIO()
-                fig_spec.savefig(img_buf, format="png"); img_buf.seek(0)
-                upload_to_user_box(client, task_folder_id, f"{date}_{task}_spectrogram.png", img_buf.getvalue())
+                    img_buf = io.BytesIO()
+                    fig_spec.savefig(img_buf, format="png"); img_buf.seek(0)
+                    upload_to_user_box(client, task_folder_id, f"{date}_{task}_spectrogram.png", img_buf.getvalue())
 
-                st.success("Features and plots saved to Box successfully.")
+                    st.success("Features and plots saved to Box successfully.")
             except Exception as e:
                 st.error(f"Feature extraction failed: {e}")

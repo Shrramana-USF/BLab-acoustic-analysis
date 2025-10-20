@@ -121,12 +121,10 @@ def split_audio_report_tab(folder_id):
         return
 
     # Display waveform with advanced audio player
-    with st.expander("View and inspect the waveform"):
-        st.info("Use the waveform below to listen or inspect before analysis.")
-        temp_path = f"/tmp/{filename}"
-        with open(temp_path, "wb") as f:
-            f.write(audio_bytes)
-        result = audix(temp_path)
+    # Simple audio player for playback
+    st.info("Loaded audio file for playback and analysis:")
+    st.audio(audio_bytes, format="audio/wav")
+
 
     try:
         y, sr = sf.read(io.BytesIO(audio_bytes))

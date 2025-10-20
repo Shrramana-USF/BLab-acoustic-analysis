@@ -5,16 +5,16 @@ import pandas as pd
 import numpy as np
 import soundfile as sf
 import matplotlib.pyplot as plt
-import parselmouth as pm  # for Praat-like analysis
+import parselmouth as pm
 from streamlit_advanced_audio import audix
 
 from analysis_utils import (
     get_box_client,
     ensure_task_folder,
     upload_to_user_box,
+    read_byte_stream,
 )
 
-# --- Task List ---
 TASKS = [
     "Rainbow passage",
     "Maximum sustained phonation on 'aaah'",
@@ -27,10 +27,8 @@ TASKS = [
 ]
 
 
-# --- Analysis Utility Functions ---
 def estimate_f0_praat(pitch):
-    """Estimate mean fundamental frequency (F0) from a Parselmouth Pitch object."""
-    pitch_values = pitch.selected_array['frequency']
+    pitch_values = pitch.selected_array["frequency"]
     pitch_values = pitch_values[pitch_values != 0]
     if len(pitch_values) == 0:
         return None
@@ -38,11 +36,10 @@ def estimate_f0_praat(pitch):
 
 
 def summarize_features(snd, pitch, intensity):
-    """Compute summary statistics for pitch and intensity."""
-    pitch_values = pitch.selected_array['frequency']
+    pitch_values = pitch.selected_array["frequency"]
     pitch_values = pitch_values[pitch_values != 0]
     inten_values = intensity.values.T.flatten()
-    features = {
+    return {
         "Pitch mean (Hz)": np.mean(pitch_values) if len(pitch_values) else np.nan,
         "Pitch std (Hz)": np.std(pitch_values) if len(pitch_values) else np.nan,
         "Pitch min (Hz)": np.min(pitch_values) if len(pitch_values) else np.nan,
@@ -51,19 +48,14 @@ def summarize_features(snd, pitch, intensity):
         "Intensity std (dB)": np.std(inten_values) if len(inten_values) else np.nan,
         "Duration (s)": snd.duration,
     }
-    return features
 
 
 def pitch_contour(pitch):
-    xs = pitch.xs()
-    ys = pitch.selected_array['frequency']
-    return xs, ys
+    return pitch.xs(), pitch.selected_array["frequency"]
 
 
 def intensity_contour(intensity):
-    xs = intensity.xs()
-    ys = intensity.values.T.flatten()
-    return xs, ys
+    return intensity.xs(), intensity.values.T.flatten()
 
 
 def compute_spectrogram(snd):
@@ -74,7 +66,7 @@ def plot_spectrogram(spectrogram):
     X, Y = spectrogram.x_grid(), spectrogram.y_grid()
     sg_db = 10 * np.log10(np.maximum(1e-10, spectrogram.values))
     fig, ax = plt.subplots()
-    img = ax.pcolormesh(X, Y, sg_db, shading='auto', cmap='viridis')
+    img = ax.pcolormesh(X, Y, sg_db, shading="auto", cmap="viridis")
     ax.set_title("Spectrogram")
     ax.set_xlabel("Time (s)")
     ax.set_ylabel("Frequency (Hz)")
@@ -82,60 +74,60 @@ def plot_spectrogram(spectrogram):
     return fig
 
 
-def download_file_from_box(client, folder_id, filename):
-    """Fetch file bytes from Box by name (used to feed into audix and analysis)."""
-    folder_items = client.folder(folder_id=folder_id).get_items(limit=1000)
-    for item in folder_items:
-        if item.name == filename:
-            return client.file(item.id).content()
-    raise FileNotFoundError(f"File '{filename}' not found in folder ID {folder_id}")
+def fetch_file_from_box(client, folder_id, filename):
+    """
+    Look for a file by name in a Box folder and return its bytes.
+    Uses your Box wrapper methods.
+    """
+    folder_items = client.folders.get_folder_items(str(folder_id))
+    file_item = next((f for f in folder_items.entries if f.type == "file" and f.name == filename), None)
+
+    if not file_item:
+        raise FileNotFoundError(f"File '{filename}' not found in folder {folder_id}")
+
+    byte_stream = client.downloads.download_file(file_item.id)
+    return read_byte_stream(byte_stream)
 
 
-# --- Streamlit Tab ---
 def split_audio_report_tab(folder_id):
     """
     Split Audio Report Tab
-    - Loads saved audio segments from Box
-    - Displays waveform using advanced audio widget
-    - Extracts and saves audio features + plots to Box
+    Loads saved audio segments from Box,
+    displays waveform using advanced audio widget,
+    extracts and saves audio features and plots.
     """
 
-    st.subheader("Split Audio Report — Analyze Audio Segments")
+    st.subheader("Split Audio Report")
 
     pid = st.text_input("PID (Unique Patient/Session ID)", key="split_pid")
     date = st.text_input("Session Date (YYYY-MM-DD)", key="split_date")
     task = st.selectbox("Select Task", TASKS, key="split_task")
-
 
     if not (pid and date and task):
         st.info("Please fill in all fields to continue.")
         return
 
     client = get_box_client()
-
-    # --- Folder structure ---
     pid_folder_id = ensure_task_folder(client, folder_id, pid)
     task_folder_id = ensure_task_folder(client, pid_folder_id, task)
     filename = f"{date}_{task}.wav"
 
-    st.write(f"Loading file from Box: **{pid}/{task}/{filename}**")
+    st.write(f"Loading file from Box: {pid}/{task}/{filename}")
 
     try:
-        audio_bytes = download_file_from_box(client, task_folder_id, filename)
+        audio_bytes = fetch_file_from_box(client, task_folder_id, filename)
     except Exception as e:
         st.error(f"Could not find or load audio file: {e}")
         return
 
-    # --- Display waveform using advanced audio widget ---
+    # Display waveform with advanced audio player
     with st.expander("View and inspect the waveform"):
         st.info("Use the waveform below to listen or inspect before analysis.")
-        # Save temp file to feed into audix
         temp_path = f"/tmp/{filename}"
         with open(temp_path, "wb") as f:
             f.write(audio_bytes)
         result = audix(temp_path)
 
-    # --- Load into numpy for analysis ---
     try:
         y, sr = sf.read(io.BytesIO(audio_bytes))
         st.caption(f"Loaded {filename} — Duration: {len(y)/sr:.2f}s, SR: {sr}Hz")
@@ -143,7 +135,6 @@ def split_audio_report_tab(folder_id):
         st.error(f"Error reading audio: {e}")
         return
 
-    # --- Extract features ---
     if st.button("Extract and Save Features"):
         with st.spinner("Analyzing audio... please wait"):
             try:
@@ -160,26 +151,24 @@ def split_audio_report_tab(folder_id):
                 df = pd.DataFrame(list(features.items()), columns=["Feature", "Value"])
                 st.dataframe(df, width="stretch", hide_index=True)
 
-                # --- Plot Pitch ---
+                # Generate plots
                 xs, f0_contour = pitch_contour(pitch)
                 fig_pitch, ax = plt.subplots()
                 ax.plot(xs, f0_contour, color="blue")
                 ax.set_title("Pitch contour")
                 st.pyplot(fig_pitch)
 
-                # --- Plot Intensity ---
                 xs, inten_contour = intensity_contour(intensity)
                 fig_intensity, ax = plt.subplots()
                 ax.plot(xs, inten_contour, color="green")
                 ax.set_title("Intensity contour")
                 st.pyplot(fig_intensity)
 
-                # --- Plot Spectrogram ---
                 spectrogram = compute_spectrogram(snd)
                 fig_spec = plot_spectrogram(spectrogram)
                 st.pyplot(fig_spec)
 
-                # --- Save all outputs to Box ---
+                # Save to Box
                 csv_buf = io.StringIO()
                 df.to_csv(csv_buf, index=False)
                 upload_to_user_box(client, task_folder_id, f"{date}_{task}_features.csv", csv_buf.getvalue().encode("utf-8"))
@@ -197,6 +186,5 @@ def split_audio_report_tab(folder_id):
                 upload_to_user_box(client, task_folder_id, f"{date}_{task}_spectrogram.png", img_buf.getvalue())
 
                 st.success("Features and plots saved to Box successfully.")
-                st.toast(f"Analysis for {task} ({date}) saved.")
             except Exception as e:
                 st.error(f"Feature extraction failed: {e}")

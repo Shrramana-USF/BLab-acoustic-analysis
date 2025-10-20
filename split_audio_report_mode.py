@@ -106,6 +106,8 @@ def split_audio_report_tab(folder_id):
 
     filename = f"{date}_{task}.wav"
 
+    st.write(f"Loading file from Box: {client}")
+
     st.write(f"Loading file from Box: {recorder_email}/{pid}/{task}/{filename}")
 
     try:

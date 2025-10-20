@@ -12,6 +12,7 @@ from analysis_utils import (
     get_box_client,
     ensure_task_folder,
     upload_to_user_box,
+    summarize_features,
     read_byte_stream,
 )
 
@@ -33,21 +34,6 @@ def estimate_f0_praat(pitch):
     if len(pitch_values) == 0:
         return None
     return np.mean(pitch_values)
-
-
-def summarize_features(snd, pitch, intensity):
-    pitch_values = pitch.selected_array["frequency"]
-    pitch_values = pitch_values[pitch_values != 0]
-    inten_values = intensity.values.T.flatten()
-    return {
-        "Pitch mean (Hz)": np.mean(pitch_values) if len(pitch_values) else np.nan,
-        "Pitch std (Hz)": np.std(pitch_values) if len(pitch_values) else np.nan,
-        "Pitch min (Hz)": np.min(pitch_values) if len(pitch_values) else np.nan,
-        "Pitch max (Hz)": np.max(pitch_values) if len(pitch_values) else np.nan,
-        "Intensity mean (dB)": np.mean(inten_values) if len(inten_values) else np.nan,
-        "Intensity std (dB)": np.std(inten_values) if len(inten_values) else np.nan,
-        "Duration (s)": snd.duration,
-    }
 
 
 def pitch_contour(pitch):

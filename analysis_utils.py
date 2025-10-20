@@ -78,8 +78,8 @@ def handle_user_login(username: str, email: str):
 
 
 # ---------------- Global Config ----------------
-PITCH_FLOOR = 2.0
-PITCH_CEILING = 2000.0
+PITCH_FLOOR = 10.0
+PITCH_CEILING = 5000.0
 AUDIX = True
 
 

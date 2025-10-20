@@ -88,20 +88,25 @@ def report_exists_in_box(client, folder_id, date, task):
 def split_audio_report_tab(folder_id):
     st.subheader("Split Audio Report")
 
+    recorder_email = st.text_input("Recorder Email ID", key="split_recorder_email")
     pid = st.text_input("PID (Unique Patient/Session ID)", key="split_pid")
     date = st.text_input("Session Date (YYYY-MM-DD)", key="split_date")
     task = st.selectbox("Select Task", TASKS, key="split_task")
 
-    if not (pid and date and task):
+    if not (recorder_email and pid and date and task):
         st.info("Please fill in all fields to continue.")
         return
 
     client = get_box_client()
-    pid_folder_id = ensure_task_folder(client, folder_id, pid)
+
+    # --- Folder hierarchy: base -> recorder -> PID -> task ---
+    recorder_folder_id = ensure_task_folder(client, folder_id, recorder_email)
+    pid_folder_id = ensure_task_folder(client, recorder_folder_id, pid)
     task_folder_id = ensure_task_folder(client, pid_folder_id, task)
+
     filename = f"{date}_{task}.wav"
 
-    st.write(f"Loading file from Box: {pid}/{task}/{filename}")
+    st.write(f"Loading file from Box: {recorder_email}/{pid}/{task}/{filename}")
 
     try:
         audio_bytes = fetch_file_from_box(client, task_folder_id, filename)
@@ -109,6 +114,7 @@ def split_audio_report_tab(folder_id):
         st.error(f"Could not find or load audio file: {e}")
         return
 
+    # --- Playback ---
     st.info("Loaded audio file for playback and analysis:")
     st.audio(audio_bytes, format="audio/wav")
 
@@ -131,12 +137,12 @@ def split_audio_report_tab(folder_id):
                     st.warning("No stable fundamental frequency detected.")
                     return
 
-                # --- Compute features and show table ---
+                # --- Compute and display features ---
                 features = summarize_features(snd, pitch, intensity)
                 df = pd.DataFrame(list(features.items()), columns=["Feature", "Value"])
                 st.dataframe(df, width="stretch", hide_index=True)
 
-                # --- Generate plots and show them ---
+                # --- Plots ---
                 xs, f0_contour = pitch_contour(pitch)
                 fig_pitch, ax = plt.subplots()
                 ax.plot(xs, f0_contour, color="blue")
@@ -153,28 +159,30 @@ def split_audio_report_tab(folder_id):
                 fig_spec = plot_spectrogram(spectrogram)
                 st.pyplot(fig_spec)
 
-                # --- Save only if report not already in Box ---
+                # --- Check if report already exists ---
                 if report_exists_in_box(client, task_folder_id, date, task):
                     st.warning(f"A report already exists for {date} — {task}.")
                     st.info("Analysis completed successfully, results are not saved again.")
-                else:
-                    csv_buf = io.StringIO()
-                    df.to_csv(csv_buf, index=False)
-                    upload_to_user_box(client, task_folder_id, f"{date}_{task}_features.csv", csv_buf.getvalue().encode("utf-8"))
+                    return
 
-                    img_buf = io.BytesIO()
-                    fig_pitch.savefig(img_buf, format="png"); img_buf.seek(0)
-                    upload_to_user_box(client, task_folder_id, f"{date}_{task}_pitch.png", img_buf.getvalue())
+                # --- Save to Box ---
+                csv_buf = io.StringIO()
+                df.to_csv(csv_buf, index=False)
+                upload_to_user_box(client, task_folder_id, f"{date}_{task}_features.csv", csv_buf.getvalue().encode("utf-8"))
 
-                    img_buf = io.BytesIO()
-                    fig_intensity.savefig(img_buf, format="png"); img_buf.seek(0)
-                    upload_to_user_box(client, task_folder_id, f"{date}_{task}_intensity.png", img_buf.getvalue())
+                img_buf = io.BytesIO()
+                fig_pitch.savefig(img_buf, format="png"); img_buf.seek(0)
+                upload_to_user_box(client, task_folder_id, f"{date}_{task}_pitch.png", img_buf.getvalue())
 
-                    img_buf = io.BytesIO()
-                    fig_spec.savefig(img_buf, format="png"); img_buf.seek(0)
-                    upload_to_user_box(client, task_folder_id, f"{date}_{task}_spectrogram.png", img_buf.getvalue())
+                img_buf = io.BytesIO()
+                fig_intensity.savefig(img_buf, format="png"); img_buf.seek(0)
+                upload_to_user_box(client, task_folder_id, f"{date}_{task}_intensity.png", img_buf.getvalue())
 
-                    st.success("Features and plots saved to Box successfully.")
+                img_buf = io.BytesIO()
+                fig_spec.savefig(img_buf, format="png"); img_buf.seek(0)
+                upload_to_user_box(client, task_folder_id, f"{date}_{task}_spectrogram.png", img_buf.getvalue())
+
+                st.success("Features and plots saved to Box successfully.")
 
             except Exception as e:
                 st.error(f"Feature extraction failed: {e}")

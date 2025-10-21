@@ -79,7 +79,7 @@ def handle_user_login(username: str, email: str):
 
 # ---------------- Global Config ----------------
 PITCH_FLOOR = 30.0
-PITCH_CEILING = 400.0
+PITCH_CEILING = 600.0
 AUDIX = True
 
 
@@ -323,9 +323,9 @@ def summarize_features(snd: pm.Sound, pitch, intensity):
     
     if np.any(~np.isnan(f0_contour)):
         features["Pitch Mean (Hz)"] = f"{np.nanmean(f0_contour):.2f}"
-        # features["Pitch Median (Hz)"] = f"{np.nanmedian(f0_contour):.2f}"
+        features["Pitch Median (Hz)"] = f"{np.nanmedian(f0_contour):.2f}"
         features["Pitch Min (Hz)"] = f"{np.nanmin(f0_contour):.2f}"
-        # features["Pitch Max (Hz1)"] = pitch_values.max()
+        features["Pitch Max (Hz1)"] = pitch_values.max()
         features["Pitch Max (Hz)"] = f"{np.nanmax(f0_contour):.2f}"
         features["Pitch Range (Hz)"] = f"{float(features['Pitch Max (Hz)']) - float(features['Pitch Min (Hz)']):.2f}"
         features["Octave"] = f"{math.log2(float(features['Pitch Max (Hz)']) / float(features['Pitch Min (Hz)'])):.2f}"

@@ -10,3 +10,4 @@ openpyxl
 box_sdk_gen
 streamlit_authenticator
 Authlib
+streamlit-js-eval

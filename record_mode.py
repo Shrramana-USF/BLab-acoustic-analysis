@@ -1,21 +1,16 @@
 import streamlit as st
 import base64
+import numpy as np
+import soundfile as sf
 import io
 
-# ---------------------------------------
-# RECORD TAB
-# ---------------------------------------
+# Streamlit JS bridge
+from streamlit_js_eval import streamlit_js_eval
+
 
 def record_tab(folder_id):
     st.header("🎙️ Record Mode")
 
-    # --- OLD BROKEN COMPONENT (Commented Out) ---
-    # from streamlit.components.v1 import declare_component
-    # _media_recorder_component = declare_component(
-    #     "media_recorder"
-    # )
-
-    # --- NEW INLINE IMPLEMENTATION USING MediaRecorder API ---
     st.markdown("""
     <style>
     button { margin: 0.3rem 0.5rem; padding: 0.6rem 1rem; font-size: 1rem; }
@@ -25,6 +20,7 @@ def record_tab(folder_id):
     <button id="start">Start Recording</button>
     <button id="stop" disabled>Stop Recording</button>
     <audio id="playback" controls></audio>
+
     <script>
     let recorder, audioChunks = [];
 
@@ -71,6 +67,25 @@ def record_tab(folder_id):
     </script>
     """, unsafe_allow_html=True)
 
-    # --- Streamlit-side listener for recorded data ---
-    # (Requires the "st.experimental_get_query_params" workaround or custom JS listener)
     st.info("Press Start/Stop to record. Browser auto-gain is disabled.")
+
+    # --- Listen for JS postMessage (AUDIO_RECORDED) ---
+    result = streamlit_js_eval(
+        js_expressions="new Promise(resolve => {window.addEventListener('message', e => { if (e.data && e.data.type === 'AUDIO_RECORDED') resolve(e.data.audio); });});",
+        key="media_recorder_listener"
+    )
+
+    if result:
+        st.success("Audio received from browser 🎧")
+        audio_bytes = base64.b64decode(result)
+
+        # Display audio player
+        st.audio(audio_bytes, format="audio/webm")
+
+        # Convert to waveform for verification
+        try:
+            data, samplerate = sf.read(io.BytesIO(audio_bytes))
+            st.write(f"Sample rate: {samplerate} Hz, Duration: {len(data)/samplerate:.2f}s")
+            st.line_chart(data[: min(len(data), 20000)])  # plot first 20k samples
+        except Exception as e:
+            st.error(f"Could not parse audio: {e}")

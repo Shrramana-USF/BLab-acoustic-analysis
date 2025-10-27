@@ -16,8 +16,7 @@ import soundfile as sf
 
 # --- NEW: Define the MediaStream-based recorder Streamlit component ---
 _media_recorder_component = declare_component(
-    "media_recorder",
-    path="."  # Local inline component (no external URL)
+    "media_recorder"
 )
 
 

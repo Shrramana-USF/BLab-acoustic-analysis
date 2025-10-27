@@ -3,52 +3,126 @@ import os
 import parselmouth as pm
 import matplotlib.pyplot as plt
 import pandas as pd
-from st_audiorec import st_audiorec
+# from st_audiorec import st_audiorec  # OLD recorder (commented)
 from streamlit_advanced_audio import audix
 from analysis_utils import *
+import tempfile
+import io
+import base64
+import numpy as np
+from streamlit.components.v1 import declare_component
+import soundfile as sf
 
 
-# --- NEW: MediaStream Recorder Helper ---
-def inject_media_recorder_js():
+# --- NEW: Define the MediaStream-based recorder Streamlit component ---
+_media_recorder_component = declare_component(
+    "media_recorder",
+    path="."  # Local inline component (no external URL)
+)
+
+
+def media_recorder(key="media_recorder"):
     """
-    Injects JavaScript that records audio using the MediaStream API and sends the data
-    back to Streamlit via postMessage. This replaces st_audiorec for more reliable capture.
+    Pure MediaStream + MediaRecorder based audio capture for Streamlit.
+    Disables AGC, echo cancellation, and noise suppression.
+    Returns raw WAV bytes (base64 decoded) once recording is stopped.
     """
-    st.markdown("""
-    <script>
-    const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+    wav_b64 = _media_recorder_component(key=key, default=None)
+    if wav_b64 is None:
+        return None
 
-    async function recordAudio() {
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            const recorder = new MediaRecorder(stream);
-            const chunks = [];
+    try:
+        return base64.b64decode(wav_b64)
+    except Exception:
+        st.error("Error decoding recorded audio data.")
+        return None
 
-            recorder.ondataavailable = e => chunks.push(e.data);
 
-            recorder.onstop = async () => {
-                const blob = new Blob(chunks, { type: 'audio/wav' });
-                const arrayBuffer = await blob.arrayBuffer();
-                const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
-                // Send base64 audio data to Streamlit
-                window.parent.postMessage({ type: 'FROM_STREAMLIT', data: base64 }, '*');
-            };
+# --- HTML + JS frontend injected dynamically ---
+def inject_media_recorder_frontend():
+    """
+    Injects MediaStream-based recorder UI into Streamlit directly.
+    This version disables all browser-level processing (AGC, suppression).
+    """
+    st.markdown(
+        """
+        <div style="margin-bottom:0.5em;">
+            <button id="startRec">🎙️ Start Recording</button>
+            <button id="stopRec" disabled>⏹️ Stop</button>
+            <span id="status">Idle</span>
+        </div>
 
-            recorder.start();
-            console.log("Recording started");
-            await sleep(10000);  // 10-second capture window (customize as needed)
-            recorder.stop();
-            console.log("Recording stopped");
-        } catch (err) {
-            alert("Microphone access denied or unavailable.");
-            console.error(err);
-        }
-    }
+        <script>
+        let recorder, audioChunks = [];
+        const startBtn = document.getElementById('startRec');
+        const stopBtn = document.getElementById('stopRec');
+        const status = document.getElementById('status');
 
-    window.recordAudio = recordAudio;
-    </script>
-    """, unsafe_allow_html=True)
+        startBtn.onclick = async () => {
+            try {
+                const constraints = {
+                    audio: {
+                        echoCancellation: false,
+                        noiseSuppression: false,
+                        autoGainControl: false,
+                        channelCount: 1,
+                        sampleRate: 44100
+                    }
+                };
 
+                const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                
+                // --- Verify actual applied settings ---
+                const track = stream.getAudioTracks()[0];
+                const settings = track.getSettings();
+                console.log('Applied audio settings:', settings);
+
+                recorder = new MediaRecorder(stream);
+                audioChunks = [];
+
+                recorder.ondataavailable = e => {
+                    if (e.data.size > 0) audioChunks.push(e.data);
+                };
+
+                recorder.onstop = async () => {
+                    const blob = new Blob(audioChunks, { type: 'audio/wav' });
+                    const arrayBuffer = await blob.arrayBuffer();
+                    const base64Audio = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+
+                    const msg = {
+                        isStreamlitMessage: true,
+                        type: "streamlit:setComponentValue",
+                        value: base64Audio
+                    };
+                    window.parent.postMessage(msg, "*");
+
+                    status.innerText = "✅ Recording complete!";
+                    startBtn.disabled = false;
+                    stopBtn.disabled = true;
+
+                    // Stop tracks to release microphone
+                    track.stop();
+                };
+
+                recorder.start();
+                status.innerText = "🎙️ Recording...";
+                startBtn.disabled = true;
+                stopBtn.disabled = false;
+            } catch (err) {
+                alert("Microphone access denied or unavailable: " + err);
+            }
+        };
+
+        stopBtn.onclick = () => {
+            if (recorder && recorder.state !== "inactive") {
+                recorder.stop();
+                status.innerText = "Processing...";
+            }
+        };
+        </script>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 def record_tab(folder_id):
@@ -82,26 +156,15 @@ def record_tab(folder_id):
     folder_id = ensure_task_folder(client, folder_id, selected_task)
 
     # ---------------- RECORD MODE ----------------
-    st.caption("Click to record, then stop. The widget shows a waveform while recording.")
-    # Recorder reloads whenever a new task is chosen
+    st.caption("Click to record, then stop. This uses the MediaStream API (no gain control, no suppression).")
     recorder_key = st.session_state.get("recorder_reload_key", f"recorder_{selected_task}")
 
     # --- OLD CODE (COMMENTED OUT) ---
     # wav_audio_data = st_audiorec()  # cannot take key argument; reload handled via rerun
 
-    # --- NEW: MediaStream-based recorder ---
-    inject_media_recorder_js()
-    st.caption("Using MediaStream-based recorder (10 seconds by default).")
-
-    if st.button("🎙️ Start Recording", key="media_rec_btn"):
-        # Trigger JavaScript to record
-        st.markdown("<script>recordAudio();</script>", unsafe_allow_html=True)
-        st.info("Recording... will automatically stop after 10 seconds.")
-    
-    # Placeholder to receive data
-    # This section will catch the message posted by JavaScript via Streamlit custom event handler.
-    # In production, you'd build a Streamlit custom component to manage the JS bridge fully.
-    wav_audio_data = st.session_state.get("recorded_audio", None)
+    # --- NEW CODE: MediaStream Recorder ---
+    inject_media_recorder_frontend()
+    wav_audio_data = media_recorder(key=recorder_key)
 
     if wav_audio_data is not None:
         try:

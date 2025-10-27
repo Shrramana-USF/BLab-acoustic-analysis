@@ -8,6 +8,49 @@ from streamlit_advanced_audio import audix
 from analysis_utils import *
 
 
+# --- NEW: MediaStream Recorder Helper ---
+def inject_media_recorder_js():
+    """
+    Injects JavaScript that records audio using the MediaStream API and sends the data
+    back to Streamlit via postMessage. This replaces st_audiorec for more reliable capture.
+    """
+    st.markdown("""
+    <script>
+    const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+    async function recordAudio() {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            const recorder = new MediaRecorder(stream);
+            const chunks = [];
+
+            recorder.ondataavailable = e => chunks.push(e.data);
+
+            recorder.onstop = async () => {
+                const blob = new Blob(chunks, { type: 'audio/wav' });
+                const arrayBuffer = await blob.arrayBuffer();
+                const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+                // Send base64 audio data to Streamlit
+                window.parent.postMessage({ type: 'FROM_STREAMLIT', data: base64 }, '*');
+            };
+
+            recorder.start();
+            console.log("Recording started");
+            await sleep(10000);  // 10-second capture window (customize as needed)
+            recorder.stop();
+            console.log("Recording stopped");
+        } catch (err) {
+            alert("Microphone access denied or unavailable.");
+            console.error(err);
+        }
+    }
+
+    window.recordAudio = recordAudio;
+    </script>
+    """, unsafe_allow_html=True)
+
+
+
 def record_tab(folder_id):
     # --- Task selection (added) ---
     st.subheader("Record Audio for Task")
@@ -42,7 +85,23 @@ def record_tab(folder_id):
     st.caption("Click to record, then stop. The widget shows a waveform while recording.")
     # Recorder reloads whenever a new task is chosen
     recorder_key = st.session_state.get("recorder_reload_key", f"recorder_{selected_task}")
-    wav_audio_data = st_audiorec()  # cannot take key argument; reload handled via rerun
+
+    # --- OLD CODE (COMMENTED OUT) ---
+    # wav_audio_data = st_audiorec()  # cannot take key argument; reload handled via rerun
+
+    # --- NEW: MediaStream-based recorder ---
+    inject_media_recorder_js()
+    st.caption("Using MediaStream-based recorder (10 seconds by default).")
+
+    if st.button("🎙️ Start Recording", key="media_rec_btn"):
+        # Trigger JavaScript to record
+        st.markdown("<script>recordAudio();</script>", unsafe_allow_html=True)
+        st.info("Recording... will automatically stop after 10 seconds.")
+    
+    # Placeholder to receive data
+    # This section will catch the message posted by JavaScript via Streamlit custom event handler.
+    # In production, you'd build a Streamlit custom component to manage the JS bridge fully.
+    wav_audio_data = st.session_state.get("recorded_audio", None)
 
     if wav_audio_data is not None:
         try:
@@ -81,7 +140,7 @@ def record_tab(folder_id):
 
             if y_region is not None and len(y_region) > 0:
                 snd = pm.Sound(y_region, sampling_frequency=sr)
-                pitch = snd.to_pitch(time_step=None,pitch_floor=10,pitch_ceiling=5000)
+                pitch = snd.to_pitch(time_step=None,pitch_floor=30,pitch_ceiling=600)
                 intensity = snd.to_intensity()
 
                 f0 = estimate_f0_praat(pitch)

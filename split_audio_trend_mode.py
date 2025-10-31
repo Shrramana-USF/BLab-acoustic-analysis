@@ -1,8 +1,6 @@
 import streamlit as st
 import pandas as pd
 import io
-import os
-import matplotlib.pyplot as plt
 from analysis_utils import (
     get_box_client,
     BASE_FOLDER_ID,
@@ -29,13 +27,14 @@ def split_audio_trend_tab(_):
     pid = st.text_input("PID (Unique Patient/Session ID)", key="trend_pid")
     task = st.selectbox("Select Task", TASKS, key="trend_task")
 
+    # --- Basic validation ---
     if not (recorder_email and pid and task):
         st.info("Please fill in all fields to continue.")
         return
 
     client = get_box_client()
 
-    # Always start from BASE_FOLDER_ID (global root)
+    # --- Locate Box folder hierarchy ---
     try:
         recorder_folder_id = ensure_task_folder(client, BASE_FOLDER_ID, recorder_email)
         pid_folder_id = ensure_task_folder(client, recorder_folder_id, pid)
@@ -44,8 +43,12 @@ def split_audio_trend_tab(_):
         st.error(f"Could not locate task folder: {e}")
         return
 
-    st.write(f"Fetching all feature reports from Box: {recorder_email}/{pid}/{task}/")
+    st.info("Click 'Generate Trend' to analyse feature trends for this task.")
+    load_trend = st.button("Generate Trend", key=f"generate_trend_{task}")
+    if not load_trend:
+        return
 
+    # --- Gather feature CSVs ---
     try:
         items = client.folders.get_folder_items(str(task_folder_id))
         feature_files = [
@@ -63,12 +66,12 @@ def split_audio_trend_tab(_):
     all_data = []
     for file_item in feature_files:
         try:
-            # Example filename: 2025-10-25_Maximum sustained phonation on 'aaah'_features.csv
+            # Expected filename: YYYY-MM-DD_<task>_features.csv
             date_str = file_item.name.split("_")[0]
             byte_stream = client.downloads.download_file(file_item.id)
             file_bytes = read_byte_stream(byte_stream)
             df = pd.read_csv(io.BytesIO(file_bytes))
-            df["Date"] = date_str
+            df["session"] = date_str
             all_data.append(df)
         except Exception as e:
             st.warning(f"Could not read {file_item.name}: {e}")
@@ -78,23 +81,18 @@ def split_audio_trend_tab(_):
         return
 
     combined_df = pd.concat(all_data, ignore_index=True)
-    pivot_df = combined_df.pivot(index="Feature", columns="Date", values="Value")
+    combined_df["Value"] = pd.to_numeric(combined_df["Value"], errors="coerce")
 
-    st.markdown("### Feature Trend Table")
-    st.dataframe(pivot_df, width="stretch")
+    # --- Display feature table ---
+    pivot = combined_df.pivot_table(
+        index="Feature", columns="session", values="Value", aggfunc="first"
+    )
+    st.dataframe(pivot, use_container_width=True)
 
-    st.markdown("### Feature Trend Plots")
+    # --- Trend charts for each feature ---
     features = combined_df["Feature"].unique()
-
-    for feature in features:
-        try:
-            temp = combined_df[combined_df["Feature"] == feature].copy()
-            temp = temp.sort_values("Date")
-            fig, ax = plt.subplots()
-            ax.plot(temp["Date"], temp["Value"], marker="o", linestyle="-")
-            ax.set_title(feature)
-            ax.set_xlabel("Date")
-            ax.set_ylabel("Value")
-            st.pyplot(fig)
-        except Exception as e:
-            st.warning(f"Could not plot {feature}: {e}")
+    for feat in features:
+        feat_df = combined_df[combined_df["Feature"] == feat].sort_values("session")
+        if not feat_df.empty:
+            st.caption(f"Trend for {feat}")
+            st.line_chart(feat_df.set_index("session")["Value"], use_container_width=True)

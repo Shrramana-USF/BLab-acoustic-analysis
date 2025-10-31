@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import io
 import os
-import plotly.express as px
+import matplotlib.pyplot as plt
 from analysis_utils import (
     get_box_client,
     BASE_FOLDER_ID,
@@ -90,20 +90,11 @@ def split_audio_trend_tab(_):
         try:
             temp = combined_df[combined_df["Feature"] == feature].copy()
             temp = temp.sort_values("Date")
-
-            fig = px.line(
-                temp,
-                x="Date",
-                y="Value",
-                markers=True,
-                title=feature,
-            )
-            fig.update_layout(
-                xaxis_title="Date",
-                yaxis_title="Value",
-                showlegend=False,
-                height=400,
-            )
-            st.plotly_chart(fig, use_container_width=True)
+            fig, ax = plt.subplots()
+            ax.plot(temp["Date"], temp["Value"], marker="o", linestyle="-")
+            ax.set_title(feature)
+            ax.set_xlabel("Date")
+            ax.set_ylabel("Value")
+            st.pyplot(fig)
         except Exception as e:
             st.warning(f"Could not plot {feature}: {e}")

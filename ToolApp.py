@@ -12,6 +12,8 @@ from record_mode import record_tab
 from report_mode import report_tab
 from audio_saver_mode import audio_saver_tab
 from split_audio_report_mode import split_audio_report_tab
+from split_audio_trend_mode import split_audio_trend_tab
+
 
 
 # Import utilities
@@ -47,12 +49,13 @@ st.warning("DO NOT FORGET TO LOGOUT!")
 
 # ---------------- MODE TABS ----------------
 
-tab1, tab2, tab3, tab4, tab5 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
     "📤 Upload",
     "🎧 Record",
     "📊 Report",
     "💾 Audio Saver",
-    "📈 Split Audio Report"
+    "📈 Split Audio Report",
+    "📉 Split Audio Trend"
 ])
 
 with tab1:
@@ -65,3 +68,6 @@ with tab4:
     audio_saver_tab(folder_id)
 with tab5:
     split_audio_report_tab(folder_id)
+with tab6:
+    split_audio_trend_tab(folder_id)
+

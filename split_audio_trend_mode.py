@@ -7,6 +7,7 @@ from analysis_utils import (
     get_box_client,
     BASE_FOLDER_ID,
     ensure_task_folder,
+    read_byte_stream,
 )
 
 TASKS = [
@@ -65,7 +66,8 @@ def split_audio_trend_tab(_):
             # Example filename: 2025-10-25_Maximum sustained phonation on 'aaah'_features.csv
             date_str = file_item.name.split("_")[0]
             byte_stream = client.downloads.download_file(file_item.id)
-            df = pd.read_csv(io.BytesIO(byte_stream))
+            file_bytes = read_byte_stream(byte_stream)
+            df = pd.read_csv(io.BytesIO(file_bytes))
             df["Date"] = date_str
             all_data.append(df)
         except Exception as e:
@@ -82,9 +84,9 @@ def split_audio_trend_tab(_):
     st.dataframe(pivot_df, width="stretch")
 
     st.markdown("### Feature Trend Plots")
-    numeric_features = combined_df["Feature"].unique()
+    features = combined_df["Feature"].unique()
 
-    for feature in numeric_features:
+    for feature in features:
         try:
             temp = combined_df[combined_df["Feature"] == feature].copy()
             temp = temp.sort_values("Date")

@@ -68,6 +68,6 @@ with tab4:
     audio_saver_tab(folder_id)
 with tab5:
     split_audio_report_tab(folder_id)
-# with tab6:
-#     split_audio_trend_tab(folder_id)
+with tab6:
+    split_audio_trend_tab(folder_id)
 

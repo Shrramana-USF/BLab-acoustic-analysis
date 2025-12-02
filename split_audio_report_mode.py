@@ -8,6 +8,8 @@ import matplotlib.pyplot as plt
 import parselmouth as pm
 from streamlit_advanced_audio import audix
 
+# praat_parselmouth-0.5.0.dev0-cp312-cp312-macosx_11_0_arm64.whl
+
 from analysis_utils import (
     get_box_client,
     BASE_FOLDER_ID,
@@ -130,7 +132,8 @@ def split_audio_report_tab(_):
         with st.spinner("Analyzing audio... please wait"):                                                                               
             try:
                 snd = pm.Sound(y, sampling_frequency=sr)
-                pitch = snd.to_pitch(pitch_floor=30, pitch_ceiling=600)
+                pitch = snd.to_pitch(time_step=None, pitch_floor=30, pitch_ceiling=600)
+                # pitch = pm.praat.call(snd, "To Pitch (filtered autocorrelation)", 0.0, 30.0, 600.0, 15, "no", 0.03, 0.09, 0.50, 0.055, 0.35, 0.14)
                 intensity = snd.to_intensity()
 
                 f0 = estimate_f0_praat(pitch)

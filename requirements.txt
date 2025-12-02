@@ -3,6 +3,7 @@ pandas
 matplotlib
 soundfile
 praat-parselmouth
+
 streamlit
 streamlit-audiorec
 streamlit-advanced-audio

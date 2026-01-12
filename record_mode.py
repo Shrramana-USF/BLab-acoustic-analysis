@@ -241,7 +241,7 @@ def record_tab(folder_id):
                     if analyze_ai_clicked:
                         model, err = init_gemini()
                         if err:
-                            st.session_state.ai_gemini_text = f"⚠️ {err}"
+                            st.session_state.ai_gemini_text = f" {err}"
                         else:
                             reference_group = st.session_state.get(
                                 "gemini_reference_group_quick", "Unknown / show both"

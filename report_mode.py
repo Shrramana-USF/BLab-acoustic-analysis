@@ -32,7 +32,7 @@ def init_gemini():
         return None, "Missing GOOGLE_API_KEY in Streamlit Secrets (recommended) or environment variables."
 
     genai.configure(api_key=api_key)
-    model = genai.GenerativeModel("gemini-1.5-flash")
+    model = genai.GenerativeModel("gemini-3-flash-preview")
     return model, None
 
 
@@ -192,7 +192,7 @@ def report_tab(folder_id):
     if load_report_ai:
         model, err = init_gemini()
         if err:
-            st.session_state.report_ai_text = f"⚠️ {err}"
+            st.session_state.report_ai_text = f"{err}"
         else:
             trend_summary = build_trend_summary(df)
             try:
@@ -205,7 +205,7 @@ def report_tab(folder_id):
                     )
                 st.session_state.report_ai_task = selected_task
             except Exception as e:
-                st.session_state.report_ai_text = f"❌ Gemini failed: {e}"
+                st.session_state.report_ai_text = f"Gemini failed: {e}"
                 st.session_state.report_ai_task = selected_task
 
         st.subheader("Gemini Summary")

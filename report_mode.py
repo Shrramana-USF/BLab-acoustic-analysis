@@ -3,12 +3,11 @@ import pandas as pd
 from analysis_utils import *
 import matplotlib.pyplot as plt
 
-# --- ADD: Gemini imports ---
+# --- Gemini additions (secure via Secrets/env) ---
 import os
 import google.generativeai as genai
 
 
-# --- ADD: Gemini init helper (secure secrets/env) ---
 def init_gemini():
     """
     Gemini via AI Studio API key stored securely in Streamlit Secrets or env var.
@@ -37,11 +36,10 @@ def init_gemini():
     return model, None
 
 
-# --- ADD: Build compact summary to send to Gemini ---
 def build_trend_summary(df: pd.DataFrame) -> pd.DataFrame:
     """
-    df columns expected at least: Feature, session, Value (numeric)
-    Returns per-feature summary: first/last/change/mean/std/min/max/count
+    df columns expected: Feature, session, Value (numeric-like)
+    Returns per-feature summary: count, first, last, change, mean, std, min, max
     """
     out_rows = []
     for feat in df["Feature"].unique():
@@ -65,12 +63,10 @@ def build_trend_summary(df: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(out_rows)
 
 
-# --- ADD: Gemini report analysis ---
 def gemini_analyse_report(model, selected_task: str, pivot: pd.DataFrame, trend_summary: pd.DataFrame) -> str:
     """
     Sends pivot + summary to Gemini and returns the response text.
     """
-    # Keep payload reasonable
     pivot_csv = pivot.reset_index().to_csv(index=False)
     summary_csv = trend_summary.to_csv(index=False)
 
@@ -90,10 +86,10 @@ Goals:
 
 Please output:
 A) Executive summary (3–6 bullets)
-B) Notable trends (group by feature families if obvious: pitch/intensity/perturbation/etc.)
+B) Notable trends (group by feature families if obvious)
 C) Possible anomalies / outliers (bullets; cite which session/feature if possible)
-D) Data quality checks (recording consistency, missing values, session count adequacy)
-E) Suggestions (repeat recordings, standardize environment, consider clinician if symptoms exist)
+D) Data quality checks
+E) Suggestions (bullets)
 
 Pivot CSV:
 {pivot_csv}
@@ -125,7 +121,7 @@ def report_tab(folder_id):
     if "prev_task_report" not in st.session_state:
         st.session_state.prev_task_report = None
 
-    # --- ADD: persist Gemini outputs across reruns ---
+    # --- Persist AI output so it doesn't vanish after reruns ---
     if "report_ai_text" not in st.session_state:
         st.session_state.report_ai_text = None
     if "report_ai_task" not in st.session_state:
@@ -133,7 +129,7 @@ def report_tab(folder_id):
 
     if selected_task != st.session_state.prev_task_report:
         st.session_state.prev_task_report = selected_task
-        # Clear AI output when switching tasks
+        # clear AI response when switching task
         st.session_state.report_ai_text = None
         st.session_state.report_ai_task = selected_task
         st.rerun()
@@ -164,17 +160,22 @@ def report_tab(folder_id):
 
     task_folder_id = task_folder.id
 
-    # --- Generate report only after task is selected ---
-    st.info("Click 'Generate report' to analyse session trends for this task.")
-    load_report = st.button("Generate Report", key=f"generate_report_{selected_task}")
-    if not load_report:
-        # If user already ran AI previously, still show it
+    # --- Buttons: side-by-side (as requested) ---
+    st.info("Generate the report, or analyse it with AI (report + Gemini summary).")
+
+    c1, c2 = st.columns(2)
+    load_report = c1.button("Generate Report", key=f"generate_report_{selected_task}")
+    load_report_ai = c2.button("Analyse Report with AI", key=f"generate_report_ai_{selected_task}")
+
+    # Keep old behavior: if neither clicked, stop.
+    if not load_report and not load_report_ai:
+        # If there is an AI response from a previous run, still show it (optional)
         if st.session_state.report_ai_text and st.session_state.report_ai_task == selected_task:
             st.subheader("Gemini Response (previous run)")
             st.markdown(st.session_state.report_ai_text)
         return
 
-    # ---------------- REPORT MODE ----------------
+    # ---------------- REPORT MODE (same as old, triggered by either button) ----------------
     df, audio_map = fetch_all_features(client, str(task_folder_id))
 
     if df.empty:
@@ -187,35 +188,30 @@ def report_tab(folder_id):
     pivot = df.pivot_table(index="Feature", columns="session", values="Value", aggfunc="first")
     st.dataframe(pivot, use_container_width=True)
 
-    # --- ADD: AI button + Gemini output area ---
-    st.markdown("### AI Analysis (Gemini)")
-    ai_col1, ai_col2 = st.columns([1, 2])
-
-    analyse_ai = ai_col1.button("Analyse Report with AI", key=f"analyse_report_ai_{selected_task}")
-    ai_col2.caption("Uses the pivot table + trend statistics to highlight trends, outliers, and data-quality checks.")
-
-    if analyse_ai:
+    # If AI button clicked, do Gemini summary now (in same run)
+    if load_report_ai:
         model, err = init_gemini()
         if err:
             st.session_state.report_ai_text = f"⚠️ {err}"
         else:
             trend_summary = build_trend_summary(df)
             try:
-                with st.spinner("Sending report summary to Gemini..."):
+                with st.spinner("Asking Gemini to analyse the report..."):
                     st.session_state.report_ai_text = gemini_analyse_report(
                         model=model,
                         selected_task=selected_task,
                         pivot=pivot,
                         trend_summary=trend_summary
                     )
+                st.session_state.report_ai_task = selected_task
             except Exception as e:
-                st.session_state.report_ai_text = f"Gemini failed: {e}"
+                st.session_state.report_ai_text = f"❌ Gemini failed: {e}"
+                st.session_state.report_ai_task = selected_task
 
-    if st.session_state.report_ai_text:
-        st.subheader("Gemini Response")
-        st.markdown(st.session_state.report_ai_text)
+        st.subheader("Gemini Summary")
+        st.markdown(st.session_state.report_ai_text if st.session_state.report_ai_text else "_No response._")
 
-    # --- Trends charts (your existing logic) ---
+    # --- Trends charts (old behavior) ---
     features = df["Feature"].unique()
     for feat in features:
         feat_df = df[df["Feature"] == feat].sort_values("session")
@@ -223,7 +219,7 @@ def report_tab(folder_id):
             st.caption(f"Trend for {feat}")
             st.line_chart(feat_df.set_index("session")["Value"], use_container_width=True)
 
-    # --- Sidebar audio playback ---
+    # --- Sidebar audio playback (old behavior) ---
     st.sidebar.subheader(f"Session Audio — {selected_task}")
     for session_name in df["session"].unique():
         st.sidebar.markdown(f"**{session_name}**")

@@ -6,6 +6,74 @@ import pandas as pd
 from st_audiorec import st_audiorec
 from streamlit_advanced_audio import audix
 from analysis_utils import *
+import io
+from PIL import Image
+import google.generativeai as genai
+
+
+def init_gemini():
+    """
+    Gemini via AI Studio API key stored securely in Streamlit Secrets or env var.
+    Prefer Streamlit Cloud Secrets: GOOGLE_API_KEY = "..."
+    """
+    api_key = None
+    try:
+        api_key = st.secrets.get("GOOGLE_API_KEY", None)
+    except Exception:
+        api_key = None
+
+    if not api_key:
+        api_key = os.getenv("GOOGLE_API_KEY")
+
+    if not api_key:
+        return None, "Missing GOOGLE_API_KEY. Add it to Streamlit Secrets (recommended) or as an environment variable."
+
+    genai.configure(api_key=api_key)
+    model = genai.GenerativeModel("gemini-1.5-flash")
+    return model, None
+
+
+def fig_to_pil_image(fig):
+    """
+    Convert a Matplotlib figure to a PIL Image (PNG) for Gemini multimodal input.
+    """
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=200, bbox_inches="tight")
+    buf.seek(0)
+    return Image.open(buf).convert("RGB")
+
+
+def gemini_review_voice(model, df_features: pd.DataFrame, spectrogram_fig, task_name: str, reference_group: str):
+    """
+    Sends features + spectrogram to Gemini for interpretation.
+    Does NOT ask Gemini to infer gender/sex. Uses user-selected reference group.
+    """
+    rows = df_features.to_dict(orient="records")
+    spec_img = fig_to_pil_image(spectrogram_fig)
+
+    prompt = f"""
+You are assisting with voice acoustics interpretation for the task: "{task_name}".
+
+IMPORTANT:
+- Do NOT infer or guess gender/sex/identity from audio or images.
+- Use the selected reference group only: "{reference_group}".
+- If reference group is "Unknown / show both", provide ranges/interpretation for typical adult male and typical adult female, without guessing which applies.
+- Do not provide a medical diagnosis. Use cautious, non-diagnostic language.
+
+Input data:
+1) Extracted acoustic features (Feature, Value): {rows}
+2) Spectrogram image attached.
+
+Please produce:
+A) Summary (2–5 sentences)
+B) Range check vs reference group (bullets). If a feature is out of typical ranges, say so with uncertainty and mention it depends on recording/task.
+C) Any potential flags (bullets) — only if supported by the data/spectrogram; otherwise “No obvious flags.”
+D) Suggestions (bullets): e.g., repeat recording conditions, consult clinician if symptoms exist, etc.
+"""
+    # Multimodal: prompt + image
+    resp = model.generate_content([prompt, spec_img])
+    return resp.text if hasattr(resp, "text") else str(resp)
+
 
 
 def record_tab(folder_id):
@@ -112,6 +180,33 @@ def record_tab(folder_id):
                     fig = plot_spectrogram(spectrogram)
                     st.pyplot(fig)
                     figs["spectrogram"] = fig
+
+                    # ---------------- GEMINI REVIEW (features + spectrogram) - ADD ONLY ----------------
+                    with st.expander("Gemini review (features + spectrogram)", expanded=False):
+                        model, err = init_gemini()
+                        if err:
+                            st.warning(err)
+                        else:
+                            reference_group = st.radio(
+                                "Reference group for typical ranges (we won't guess it from the audio):",
+                                options=["Unknown / show both", "Adult male (self-reported)", "Adult female (self-reported)"],
+                                index=0,
+                                horizontal=True,
+                                key="gemini_reference_group",
+                            )
+
+                            if st.button("Run Gemini review", key="gemini_review_btn"):
+                                with st.spinner("Sending features + spectrogram to Gemini..."):
+                                    review_text = gemini_review_voice(
+                                        model=model,
+                                        df_features=df,
+                                        spectrogram_fig=figs["spectrogram"],
+                                        task_name=selected_task,
+                                        reference_group=reference_group,
+                                    )
+                                st.markdown(review_text)
+                    # -------------------------------------------------------------------------------
+
 
                     if save_auto:
                         with st.spinner("Saving the analysis", show_time=True):

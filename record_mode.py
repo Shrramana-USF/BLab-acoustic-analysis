@@ -268,7 +268,7 @@ def record_tab(folder_id):
                                         reference_group=reference_group,
                                     )
                             except Exception as e:
-                                st.session_state.ai_gemini_text = f"❌ Gemini failed: {e}"
+                                st.session_state.ai_gemini_text = f"Gemini failed: {e}"
 
                     # Display persisted Gemini response (if any)
                     if st.session_state.ai_gemini_text:

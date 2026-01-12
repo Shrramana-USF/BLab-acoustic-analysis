@@ -80,16 +80,15 @@ You are given:
 Goals:
 - Identify notable trends across sessions (improving/worsening/stable).
 - Call out potential anomalies or outliers (sudden jumps, inconsistent values, missingness patterns).
+- Provide interpretation for typical adult male and typical adult female ranges, without guessing which applies.
 - Provide non-diagnostic, cautious interpretation and practical suggestions for next steps.
 - Do NOT provide a medical diagnosis.
 - Do NOT infer sensitive attributes (gender/sex/identity) from the data.
 
 Please output:
-A) Executive summary (3–6 bullets)
-B) Notable trends (group by feature families if obvious)
-C) Possible anomalies / outliers (bullets; cite which session/feature if possible)
-D) Data quality checks
-E) Suggestions (bullets)
+A) Summary (3–6 bullets)
+B) Notable trends (group by feature families if obvious) & Possible anomalies / outliers (bullets; cite which session/feature if possible)
+C) Suggestions (bullets)
 
 Pivot CSV:
 {pivot_csv}

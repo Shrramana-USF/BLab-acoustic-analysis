@@ -67,7 +67,6 @@ def gemini_review_voice_with_audio(
 You are assisting with voice acoustics interpretation for the task: "{task_name}".
 
 IMPORTANT:
-- Do NOT infer or guess gender/sex/identity from the audio.
 - Use the selected reference group only: "{reference_group}".
 - If reference group is "Unknown / show both", provide interpretation for typical adult male and typical adult female ranges, without guessing which applies.
 - Do not provide a medical diagnosis. Use cautious, non-diagnostic language.
@@ -77,7 +76,7 @@ Input data:
 2) Audio recording is attached (WAV).
 
 Please produce:
-A) Summary (2–5 sentences)
+A) Summary (2–5 sentences). GUESS gender/sex and age based on the audio.
 B) Range check vs reference group (bullets). If a feature is out of typical ranges, say so with uncertainty and mention it depends on recording/task.
 C) Any potential flags (bullets) — only if supported by the data/audio; otherwise “No obvious flags.”
 D) Suggestions (bullets): e.g., repeat recording conditions, consult clinician if symptoms exist, etc.

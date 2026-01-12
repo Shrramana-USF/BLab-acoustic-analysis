@@ -18,7 +18,13 @@ def init_gemini():
     """
     api_key = None
     try:
+        # Supports top-level: GOOGLE_API_KEY = "..."
         api_key = st.secrets.get("GOOGLE_API_KEY", None)
+        # Supports sectioned:
+        # [Gemini]
+        # GOOGLE_API_KEY = "..."
+        if not api_key:
+            api_key = st.secrets.get("Gemini", {}).get("GOOGLE_API_KEY", None)
     except Exception:
         api_key = None
 
@@ -33,9 +39,10 @@ def init_gemini():
     return model, None
 
 
+# (Kept for compatibility; not used for Gemini audio mode)
 def fig_to_pil_image(fig):
     """
-    Convert a Matplotlib figure to a PIL Image (PNG) for Gemini multimodal input.
+    Convert a Matplotlib figure to a PIL Image (PNG).
     """
     buf = io.BytesIO()
     fig.savefig(buf, format="png", dpi=200, bbox_inches="tight")
@@ -43,51 +50,69 @@ def fig_to_pil_image(fig):
     return Image.open(buf).convert("RGB")
 
 
-def gemini_review_voice(model, df_features: pd.DataFrame, spectrogram_fig, task_name: str, reference_group: str):
+def gemini_review_voice_with_audio(
+    model,
+    df_features: pd.DataFrame,
+    audio_wav_bytes: bytes,
+    task_name: str,
+    reference_group: str
+):
     """
-    Sends features + spectrogram to Gemini for interpretation.
-    Does NOT ask Gemini to infer gender/sex. Uses user-selected reference group.
+    Sends features + AUDIO (wav bytes) to Gemini for interpretation.
+    Does NOT infer/guess gender/sex/identity. Uses user-selected reference group.
     """
     rows = df_features.to_dict(orient="records")
-    spec_img = fig_to_pil_image(spectrogram_fig)
 
     prompt = f"""
 You are assisting with voice acoustics interpretation for the task: "{task_name}".
 
 IMPORTANT:
-- Do NOT infer or guess gender/sex/identity from audio or images.
+- Do NOT infer or guess gender/sex/identity from the audio.
 - Use the selected reference group only: "{reference_group}".
-- If reference group is "Unknown / show both", provide ranges/interpretation for typical adult male and typical adult female, without guessing which applies.
+- If reference group is "Unknown / show both", provide interpretation for typical adult male and typical adult female ranges, without guessing which applies.
 - Do not provide a medical diagnosis. Use cautious, non-diagnostic language.
 
 Input data:
 1) Extracted acoustic features (Feature, Value): {rows}
-2) Spectrogram image attached.
+2) Audio recording is attached (WAV).
 
 Please produce:
 A) Summary (2–5 sentences)
 B) Range check vs reference group (bullets). If a feature is out of typical ranges, say so with uncertainty and mention it depends on recording/task.
-C) Any potential flags (bullets) — only if supported by the data/spectrogram; otherwise “No obvious flags.”
+C) Any potential flags (bullets) — only if supported by the data/audio; otherwise “No obvious flags.”
 D) Suggestions (bullets): e.g., repeat recording conditions, consult clinician if symptoms exist, etc.
 """
-    # Multimodal: prompt + image
-    resp = model.generate_content([prompt, spec_img])
-    return resp.text if hasattr(resp, "text") else str(resp)
 
+    audio_part = {
+        "inline_data": {
+            "mime_type": "audio/wav",
+            "data": audio_wav_bytes
+        }
+    }
+
+    resp = model.generate_content([prompt, audio_part])
+    return resp.text if hasattr(resp, "text") else str(resp)
 
 
 def record_tab(folder_id):
     # --- Task selection (added) ---
     st.subheader("Record Audio for Task")
-    tasks = [ "Rainbow passage", "Maximum sustained phonation on 'aaah'", "Comfortable sustained phonation on 'eeee'", 
-             "Glide up to your highest pitch on 'eeee'", "Glide down to your lowest pitch on 'eeee'", 
-             "Sustained 'aaah' at minimum volume", "Maximum loudness level (brief 'AAAH')", "Conversational speech"]
+    tasks = [
+        "Rainbow passage",
+        "Maximum sustained phonation on 'aaah'",
+        "Comfortable sustained phonation on 'eeee'",
+        "Glide up to your highest pitch on 'eeee'",
+        "Glide down to your lowest pitch on 'eeee'",
+        "Sustained 'aaah' at minimum volume",
+        "Maximum loudness level (brief 'AAAH')",
+        "Conversational speech"
+    ]
     selected_task = st.radio(
         "Select a task to continue:",
         options=tasks,
         index=None,  # none pre-selected
         horizontal=True,
-        key="record_task_radio" 
+        key="record_task_radio"
     )
 
     # --- Reset UI and reload recorder when switching tasks ---
@@ -108,10 +133,8 @@ def record_tab(folder_id):
 
     # ---------------- RECORD MODE ----------------
     st.caption("Click to record, then stop. The widget shows a waveform while recording.")
-    # Recorder reloads whenever a new task is chosen
     recorder_key = st.session_state.get("recorder_reload_key", f"recorder_{selected_task}")
     wav_audio_data = st_audiorec()  # cannot take key argument; reload handled via rerun
-
 
     if wav_audio_data is not None:
         try:
@@ -134,9 +157,28 @@ def record_tab(folder_id):
             st.caption("Trim the audio to analyse a selected portion")
             save_auto = st.checkbox("Save the analysis automatically", key="record_save_auto")
 
+            # --- Persist AI outputs across reruns ---
+            if "ai_df" not in st.session_state:
+                st.session_state.ai_df = None
+            if "ai_gemini_text" not in st.session_state:
+                st.session_state.ai_gemini_text = None
+            if "ai_last_task" not in st.session_state:
+                st.session_state.ai_last_task = None
+
+            # Clear previous AI results when switching tasks
+            if st.session_state.ai_last_task != selected_task:
+                st.session_state.ai_df = None
+                st.session_state.ai_gemini_text = None
+                st.session_state.ai_last_task = selected_task
+
+            # --- Two buttons side by side ---
+            col1, col2 = st.columns(2)
+            analyze_clicked = col1.button("Analyse Audio", key="record_analyze")
+            analyze_ai_clicked = col2.button("Analyse Audio with AI", key="record_analyze_ai")
+
             y_region = None
 
-            if st.button("Analyse Audio", key="record_analyze"):
+            if analyze_clicked or analyze_ai_clicked:
                 if result and result.get("selectedRegion"):
                     start = result["selectedRegion"]["start"]
                     end = result["selectedRegion"]["end"]
@@ -148,9 +190,18 @@ def record_tab(folder_id):
                     y_region = y
                     st.info("No region selected: Analysing entire file")
 
+            # Quick reference group selector (self-reported; used by AI button)
+            st.radio(
+                "Reference group for typical ranges (self-reported):",
+                options=["Unknown / show both", "Adult male (self-reported)", "Adult female (self-reported)"],
+                index=0,
+                horizontal=True,
+                key="gemini_reference_group_quick",
+            )
+
             if y_region is not None and len(y_region) > 0:
                 snd = pm.Sound(y_region, sampling_frequency=sr)
-                pitch = snd.to_pitch(time_step=None,pitch_floor=30,pitch_ceiling=600)
+                pitch = snd.to_pitch(time_step=None, pitch_floor=30, pitch_ceiling=600)
                 intensity = snd.to_intensity()
 
                 f0 = estimate_f0_praat(pitch)
@@ -159,7 +210,13 @@ def record_tab(folder_id):
                 else:
                     features = summarize_features(snd, pitch, intensity)
                     df = pd.DataFrame(list(features.items()), columns=["Feature", "Value"])
+
+                    # Always show extracted features after analysis
+                    st.subheader("Extracted Features")
                     st.dataframe(df, width="stretch", hide_index=True)
+
+                    # Save features in session_state so they persist after reruns
+                    st.session_state.ai_df = df
 
                     figs = {}
                     xs, f0_contour = pitch_contour(pitch)
@@ -181,32 +238,43 @@ def record_tab(folder_id):
                     st.pyplot(fig)
                     figs["spectrogram"] = fig
 
-                    # ---------------- GEMINI REVIEW (features + spectrogram) - ADD ONLY ----------------
-                    with st.expander("Gemini review (features + spectrogram)", expanded=False):
+                    # If "Analyse Audio with AI" was clicked, call Gemini now and persist response
+                    if analyze_ai_clicked:
                         model, err = init_gemini()
                         if err:
-                            st.warning(err)
+                            st.session_state.ai_gemini_text = f"⚠️ {err}"
                         else:
-                            reference_group = st.radio(
-                                "Reference group for typical ranges (we won't guess it from the audio):",
-                                options=["Unknown / show both", "Adult male (self-reported)", "Adult female (self-reported)"],
-                                index=0,
-                                horizontal=True,
-                                key="gemini_reference_group",
+                            reference_group = st.session_state.get(
+                                "gemini_reference_group_quick", "Unknown / show both"
                             )
 
-                            if st.button("Run Gemini review", key="gemini_review_btn"):
-                                with st.spinner("Sending features + spectrogram to Gemini..."):
-                                    review_text = gemini_review_voice(
+                            # Convert analysed region to WAV bytes to send to Gemini
+                            region_temp_path = save_temp_mono_wav(y_region, sr)
+                            try:
+                                with open(region_temp_path, "rb") as f:
+                                    region_wav_bytes = f.read()
+                            finally:
+                                try:
+                                    os.unlink(region_temp_path)
+                                except Exception:
+                                    pass
+
+                            try:
+                                with st.spinner("Sending features + audio to Gemini..."):
+                                    st.session_state.ai_gemini_text = gemini_review_voice_with_audio(
                                         model=model,
                                         df_features=df,
-                                        spectrogram_fig=figs["spectrogram"],
+                                        audio_wav_bytes=region_wav_bytes,
                                         task_name=selected_task,
                                         reference_group=reference_group,
                                     )
-                                st.markdown(review_text)
-                    # -------------------------------------------------------------------------------
+                            except Exception as e:
+                                st.session_state.ai_gemini_text = f"❌ Gemini failed: {e}"
 
+                    # Display persisted Gemini response (if any)
+                    if st.session_state.ai_gemini_text:
+                        st.subheader("Gemini Response")
+                        st.markdown(st.session_state.ai_gemini_text)
 
                     if save_auto:
                         with st.spinner("Saving the analysis", show_time=True):
@@ -214,3 +282,12 @@ def record_tab(folder_id):
                         st.success("Analysed and Saved results")
                     else:
                         st.info("Analysis completed (not saved). Check 'Save automatically' to reanalyse and store the results.")
+            else:
+                # If user previously ran AI and we reran, still show persisted outputs
+                if st.session_state.ai_df is not None:
+                    st.subheader("Extracted Features (previous run)")
+                    st.dataframe(st.session_state.ai_df, width="stretch", hide_index=True)
+
+                if st.session_state.ai_gemini_text:
+                    st.subheader("Gemini Response (previous run)")
+                    st.markdown(st.session_state.ai_gemini_text)

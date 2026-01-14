@@ -94,7 +94,7 @@ def upload_tab(folder_id):
 
     # Analysis (unchanged)
     snd = pm.Sound(y_region, sampling_frequency=sr)
-    pitch = snd.to_pitch(time_step=None, pitch_floor=30,pitch_ceiling=600)
+    pitch = pm.praat.call(snd, "To Pitch (filtered autocorrelation)", 0.0, 30.0, 600.0, 15, "no", 0.03, 0.09, 0.50, 0.055, 0.35, 0.14)
     intensity = snd.to_intensity()
 
     f0 = estimate_f0_praat(pitch)

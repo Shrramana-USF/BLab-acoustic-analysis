@@ -86,7 +86,7 @@ def audio_saver_tab(folder_id):
         y_segment = y[start_idx:end_idx]
 
         buf = io.BytesIO()
-        sf.write(buf, y_segment, sr, format="WAV")
+        sf.write(buf, y_segment, sr, format="WAV", subtype="PCM_16")
         buf.seek(0)
         st.audio(buf, format="audio/wav")
 

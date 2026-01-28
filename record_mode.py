@@ -8,7 +8,13 @@ from streamlit_advanced_audio import audix
 from analysis_utils import *
 import io
 from PIL import Image
-import google.genai as genai
+from google import genai
+
+
+
+from google import genai
+import os
+import streamlit as st
 
 
 def init_gemini():
@@ -18,13 +24,9 @@ def init_gemini():
     """
     api_key = None
     try:
-        # Supports top-level: GOOGLE_API_KEY = "..."
-        api_key = st.secrets.get("GOOGLE_API_KEY", None)
-        # Supports sectioned:
-        # [Gemini]
-        # GOOGLE_API_KEY = "..."
+        api_key = st.secrets.get("GOOGLE_API_KEY")
         if not api_key:
-            api_key = st.secrets.get("Gemini", {}).get("GOOGLE_API_KEY", None)
+            api_key = st.secrets.get("Gemini", {}).get("GOOGLE_API_KEY")
     except Exception:
         api_key = None
 
@@ -32,11 +34,21 @@ def init_gemini():
         api_key = os.getenv("GOOGLE_API_KEY")
 
     if not api_key:
-        return None, "Missing GOOGLE_API_KEY. Add it to Streamlit Secrets (recommended) or as an environment variable."
+        return None, "Missing GOOGLE_API_KEY. Add it to Streamlit Secrets or an environment variable."
 
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel("gemini-3-flash-preview")
+    # Streamlit-safe singleton client
+    if "genai_client" not in st.session_state:
+        st.session_state.genai_client = genai.Client(api_key=api_key)
+
+    client = st.session_state.genai_client
+
+    try:
+        model = client.models.get("gemini-1.5-flash")
+    except Exception as e:
+        return None, f"Failed to load Gemini model: {e}"
+
     return model, None
+
 
 
 # (Kept for compatibility; not used for Gemini audio mode)

@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 
 # --- Gemini additions (secure via Secrets/env) ---
 import os
-import google.generativeai as genai
+# import google.generativeai as genai
 
 
 # def init_gemini():

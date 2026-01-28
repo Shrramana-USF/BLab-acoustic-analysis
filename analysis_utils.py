@@ -240,7 +240,7 @@ def pitch_contour(pitch):
     xs = pitch.xs()
     f0 = pitch.selected_array["frequency"]
     f0[f0 == 0] = np.nan
-    return xs, f0
+    return xs, f0 
 
 
 def intensity_contour(intensity):

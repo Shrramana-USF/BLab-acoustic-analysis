@@ -8,7 +8,7 @@ from streamlit_advanced_audio import audix
 from analysis_utils import *
 import io
 from PIL import Image
-import google.generativeai as genai
+import google.genai as genai
 
 
 def init_gemini():

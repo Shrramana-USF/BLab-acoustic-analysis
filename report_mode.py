@@ -5,24 +5,23 @@ import matplotlib.pyplot as plt
 
 # --- Gemini additions (secure via Secrets/env) ---
 import os
-from google import genai
-
-
-from google import genai
-import os
-import streamlit as st
+import google.generativeai as genai
 
 
 def init_gemini():
     """
     Gemini via AI Studio API key stored securely in Streamlit Secrets or env var.
-    Prefer Streamlit Cloud Secrets: GOOGLE_API_KEY = "..."
+    Supports either:
+      GOOGLE_API_KEY = "..."
+    or:
+      [Gemini]
+      GOOGLE_API_KEY = "..."
     """
     api_key = None
     try:
-        api_key = st.secrets.get("GOOGLE_API_KEY")
+        api_key = st.secrets.get("GOOGLE_API_KEY", None)
         if not api_key:
-            api_key = st.secrets.get("Gemini", {}).get("GOOGLE_API_KEY")
+            api_key = st.secrets.get("Gemini", {}).get("GOOGLE_API_KEY", None)
     except Exception:
         api_key = None
 
@@ -30,21 +29,11 @@ def init_gemini():
         api_key = os.getenv("GOOGLE_API_KEY")
 
     if not api_key:
-        return None, "Missing GOOGLE_API_KEY. Add it to Streamlit Secrets or an environment variable."
+        return None, "Missing GOOGLE_API_KEY in Streamlit Secrets (recommended) or environment variables."
 
-    # Streamlit-safe singleton client
-    if "genai_client" not in st.session_state:
-        st.session_state.genai_client = genai.Client(api_key=api_key)
-
-    client = st.session_state.genai_client
-
-    try:
-        model = client.models.get("gemini-1.5-flash")
-    except Exception as e:
-        return None, f"Failed to load Gemini model: {e}"
-
+    genai.configure(api_key=api_key)
+    model = genai.GenerativeModel("gemini-3-flash-preview")
     return model, None
-
 
 
 def build_trend_summary(df: pd.DataFrame) -> pd.DataFrame:

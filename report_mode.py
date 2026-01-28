@@ -8,32 +8,32 @@ import os
 import google.generativeai as genai
 
 
-def init_gemini():
-    """
-    Gemini via AI Studio API key stored securely in Streamlit Secrets or env var.
-    Supports either:
-      GOOGLE_API_KEY = "..."
-    or:
-      [Gemini]
-      GOOGLE_API_KEY = "..."
-    """
-    api_key = None
-    try:
-        api_key = st.secrets.get("GOOGLE_API_KEY", None)
-        if not api_key:
-            api_key = st.secrets.get("Gemini", {}).get("GOOGLE_API_KEY", None)
-    except Exception:
-        api_key = None
+# def init_gemini():
+#     """
+#     Gemini via AI Studio API key stored securely in Streamlit Secrets or env var.
+#     Supports either:
+#       GOOGLE_API_KEY = "..."
+#     or:
+#       [Gemini]
+#       GOOGLE_API_KEY = "..."
+#     """
+#     api_key = None
+#     try:
+#         api_key = st.secrets.get("GOOGLE_API_KEY", None)
+#         if not api_key:
+#             api_key = st.secrets.get("Gemini", {}).get("GOOGLE_API_KEY", None)
+#     except Exception:
+#         api_key = None
 
-    if not api_key:
-        api_key = os.getenv("GOOGLE_API_KEY")
+#     if not api_key:
+#         api_key = os.getenv("GOOGLE_API_KEY")
 
-    if not api_key:
-        return None, "Missing GOOGLE_API_KEY in Streamlit Secrets (recommended) or environment variables."
+#     if not api_key:
+#         return None, "Missing GOOGLE_API_KEY in Streamlit Secrets (recommended) or environment variables."
 
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel("gemini-3-flash-preview")
-    return model, None
+#     genai.configure(api_key=api_key)
+#     model = genai.GenerativeModel("gemini-3-flash-preview")
+#     return model, None
 
 
 def build_trend_summary(df: pd.DataFrame) -> pd.DataFrame:

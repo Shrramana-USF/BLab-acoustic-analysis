@@ -11,32 +11,32 @@ from PIL import Image
 import google.generativeai as genai
 
 
-def init_gemini():
-    """
-    Gemini via AI Studio API key stored securely in Streamlit Secrets or env var.
-    Prefer Streamlit Cloud Secrets: GOOGLE_API_KEY = "..."
-    """
-    api_key = None
-    try:
-        # Supports top-level: GOOGLE_API_KEY = "..."
-        api_key = st.secrets.get("GOOGLE_API_KEY", None)
-        # Supports sectioned:
-        # [Gemini]
-        # GOOGLE_API_KEY = "..."
-        if not api_key:
-            api_key = st.secrets.get("Gemini", {}).get("GOOGLE_API_KEY", None)
-    except Exception:
-        api_key = None
+# def init_gemini():
+#     """
+#     Gemini via AI Studio API key stored securely in Streamlit Secrets or env var.
+#     Prefer Streamlit Cloud Secrets: GOOGLE_API_KEY = "..."
+#     """
+#     api_key = None
+#     try:
+#         # Supports top-level: GOOGLE_API_KEY = "..."
+#         api_key = st.secrets.get("GOOGLE_API_KEY", None)
+#         # Supports sectioned:
+#         # [Gemini]
+#         # GOOGLE_API_KEY = "..."
+#         if not api_key:
+#             api_key = st.secrets.get("Gemini", {}).get("GOOGLE_API_KEY", None)
+#     except Exception:
+#         api_key = None
 
-    if not api_key:
-        api_key = os.getenv("GOOGLE_API_KEY")
+#     if not api_key:
+#         api_key = os.getenv("GOOGLE_API_KEY")
 
-    if not api_key:
-        return None, "Missing GOOGLE_API_KEY. Add it to Streamlit Secrets (recommended) or as an environment variable."
+#     if not api_key:
+#         return None, "Missing GOOGLE_API_KEY. Add it to Streamlit Secrets (recommended) or as an environment variable."
 
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel("gemini-3-flash-preview")
-    return model, None
+#     genai.configure(api_key=api_key)
+#     model = genai.GenerativeModel("gemini-3-flash-preview")
+#     return model, None
 
 
 # (Kept for compatibility; not used for Gemini audio mode)

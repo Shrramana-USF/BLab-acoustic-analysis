@@ -20,27 +20,20 @@ CSV_FILENAME = "users.csv"
 
 
 class InMemoryTokenStorage(TokenStorage):
-    """Token storage that auto-refreshes using the refresh token."""
+    """Token storage that provides refresh token for auto-refresh."""
 
     def __init__(self, refresh_token: str):
-        self._refresh_token = refresh_token
-        self._token: AccessToken | None = None
+        # Initialize with refresh token so SDK can use it
+        self._token = AccessToken(access_token="", refresh_token=refresh_token)
 
     def store(self, token: AccessToken) -> None:
         self._token = token
-        # Keep refresh token updated
-        if token.refresh_token:
-            self._refresh_token = token.refresh_token
 
     def get(self) -> AccessToken | None:
         return self._token
 
     def clear(self) -> None:
         self._token = None
-
-    @property
-    def refresh_token(self) -> str:
-        return self._refresh_token
 
 
 def get_box_client():
@@ -65,8 +58,8 @@ def get_box_client():
     )
     auth = BoxOAuth(config=config)
 
-    # Force token refresh on initialization
-    auth.refresh_token(token_storage.refresh_token)
+    # Force token refresh to get valid access token
+    auth.refresh_token()
 
     return BoxClient(auth=auth)
 

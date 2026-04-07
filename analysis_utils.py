@@ -8,38 +8,43 @@ import math
 import parselmouth as pm
 import matplotlib.pyplot as plt
 from parselmouth.praat import call as praat_call
-from box_sdk_gen import BoxClient, BoxOAuth, OAuthConfig, TokenStorage, AccessToken
+from box_sdk_gen import BoxClient, BoxDeveloperTokenAuth
 from box_sdk_gen.managers.uploads import UploadFileAttributes, UploadFileAttributesParentField, UploadFileVersionAttributes
 from box_sdk_gen.internal.utils import read_byte_stream
 import streamlit as st
 from streamlit_advanced_audio import audix, WaveSurferOptions
+import requests
 
 # ---------------- BOX SETUP ----------------
 BASE_FOLDER_ID = "341557643428"
 CSV_FILENAME = "users.csv"
 
 
-class InMemoryTokenStorage(TokenStorage):
-    """Token storage that provides refresh token for auto-refresh."""
-
-    def __init__(self, refresh_token: str):
-        # Initialize with refresh token so SDK can use it
-        self._token = AccessToken(access_token="", refresh_token=refresh_token)
-
-    def store(self, token: AccessToken) -> None:
-        self._token = token
-
-    def get(self) -> AccessToken | None:
-        return self._token
-
-    def clear(self) -> None:
-        self._token = None
+def _get_access_token_from_refresh():
+    """Exchange refresh token for access token via Box API."""
+    response = requests.post(
+        "https://api.box.com/oauth2/token",
+        data={
+            "grant_type": "refresh_token",
+            "client_id": st.secrets["box"]["client_id"],
+            "client_secret": st.secrets["box"]["client_secret"],
+            "refresh_token": st.secrets["box"]["refresh_token"],
+        }
+    )
+    if response.status_code == 200:
+        tokens = response.json()
+        # Store new refresh token in session state for subsequent calls
+        st.session_state["box_refresh_token"] = tokens["refresh_token"]
+        st.session_state["box_access_token"] = tokens["access_token"]
+        return tokens["access_token"], tokens["refresh_token"]
+    else:
+        raise Exception(f"Token refresh failed: {response.json()}")
 
 
 def get_box_client():
     """
-    Create Box client using OAuth 2.0 with refresh tokens.
-    Tokens auto-refresh when they expire.
+    Create Box client using OAuth 2.0.
+    Handles token refresh and persistence via session state.
 
     Required secrets:
         [box]
@@ -47,20 +52,14 @@ def get_box_client():
         client_secret = "your_client_secret"
         refresh_token = "your_refresh_token"
     """
-    token_storage = InMemoryTokenStorage(
-        refresh_token=st.secrets["box"]["refresh_token"]
-    )
+    # Check if we have a valid access token in session state
+    if "box_access_token" in st.session_state:
+        access_token = st.session_state["box_access_token"]
+    else:
+        # First call - exchange refresh token for access token
+        access_token, _ = _get_access_token_from_refresh()
 
-    config = OAuthConfig(
-        client_id=st.secrets["box"]["client_id"],
-        client_secret=st.secrets["box"]["client_secret"],
-        token_storage=token_storage,
-    )
-    auth = BoxOAuth(config=config)
-
-    # Force token refresh to get valid access token
-    auth.refresh_token()
-
+    auth = BoxDeveloperTokenAuth(token=access_token)
     return BoxClient(auth=auth)
 
 def get_users_csv(client: BoxClient):

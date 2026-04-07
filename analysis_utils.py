@@ -8,7 +8,9 @@ import math
 import parselmouth as pm
 import matplotlib.pyplot as plt
 from parselmouth.praat import call as praat_call
-from box_sdk_gen import BoxClient, BoxDeveloperTokenAuth
+from box_sdk_gen import BoxClient, BoxOAuth, OAuthConfig, AccessToken
+from box_sdk_gen.box.token_storage import TokenStorage
+from typing import Optional
 from box_sdk_gen.managers.uploads import UploadFileAttributes, UploadFileAttributesParentField, UploadFileVersionAttributes
 from box_sdk_gen.internal.utils import read_byte_stream
 import streamlit as st
@@ -19,17 +21,70 @@ BASE_FOLDER_ID = "341557643428"
 CSV_FILENAME = "users.csv"
 
 
-def get_box_client():
+class StreamlitTokenStorage(TokenStorage):
+    """Persists tokens in st.session_state, loads initial from secrets."""
+
+    SESSION_KEY = "_box_token"
+
+    def __init__(self):
+        if self.SESSION_KEY not in st.session_state:
+            self._load_from_secrets()
+
+    def _load_from_secrets(self):
+        try:
+            box_secrets = st.secrets["box"]
+            token = AccessToken(
+                access_token=box_secrets.get("access_token", ""),
+                refresh_token=box_secrets.get("refresh_token", ""),
+                expires_in=box_secrets.get("expires_in", 3600),
+                token_type="bearer"
+            )
+            st.session_state[self.SESSION_KEY] = token
+        except Exception:
+            st.session_state[self.SESSION_KEY] = None
+
+    def store(self, token: AccessToken) -> None:
+        st.session_state[self.SESSION_KEY] = token
+
+    def get(self) -> Optional[AccessToken]:
+        return st.session_state.get(self.SESSION_KEY)
+
+    def clear(self) -> None:
+        if self.SESSION_KEY in st.session_state:
+            del st.session_state[self.SESSION_KEY]
+
+
+def get_box_client() -> BoxClient:
     """
-    Create Box client using Developer Token.
-    Token expires every 60 minutes - regenerate in Box Developer Console.
+    Create Box client using OAuth 2.0 with automatic token refresh.
 
     Required secrets:
         [box]
-        developer_token = "your_developer_token"
+        client_id = "your_client_id"
+        client_secret = "your_client_secret"
+        access_token = "your_access_token"
+        refresh_token = "your_refresh_token"
     """
-    auth = BoxDeveloperTokenAuth(token=st.secrets["box"]["developer_token"])
-    return BoxClient(auth=auth)
+    try:
+        token_storage = StreamlitTokenStorage()
+
+        current_token = token_storage.get()
+        if not current_token or not current_token.access_token:
+            st.error("Box tokens not configured. Check secrets.")
+            st.stop()
+
+        oauth_config = OAuthConfig(
+            client_id=st.secrets["box"]["client_id"],
+            client_secret=st.secrets["box"]["client_secret"],
+            token_storage=token_storage
+        )
+
+        auth = BoxOAuth(oauth_config)
+        return BoxClient(auth=auth)
+
+    except KeyError as e:
+        st.error(f"Missing Box config: {e}")
+        st.stop()
 
 def get_users_csv(client: BoxClient):
     items = client.folders.get_folder_items(BASE_FOLDER_ID)

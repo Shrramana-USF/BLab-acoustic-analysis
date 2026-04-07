@@ -8,7 +8,7 @@ import math
 import parselmouth as pm
 import matplotlib.pyplot as plt
 from parselmouth.praat import call as praat_call
-from box_sdk_gen import BoxClient, BoxCCGAuth, CCGConfig
+from box_sdk_gen import BoxClient, BoxOAuth, OAuthConfig, TokenStorage, AccessToken
 from box_sdk_gen.managers.uploads import UploadFileAttributes, UploadFileAttributesParentField, UploadFileVersionAttributes
 from box_sdk_gen.internal.utils import read_byte_stream
 import streamlit as st
@@ -18,24 +18,44 @@ from streamlit_advanced_audio import audix, WaveSurferOptions
 BASE_FOLDER_ID = "341557643428"
 CSV_FILENAME = "users.csv"
 
-@st.cache_resource
+
+class InMemoryTokenStorage(TokenStorage):
+    """Token storage that auto-refreshes using the refresh token."""
+
+    def __init__(self, refresh_token: str):
+        self._token = AccessToken(access_token="", refresh_token=refresh_token)
+
+    def store(self, token: AccessToken) -> None:
+        self._token = token
+
+    def get(self) -> AccessToken | None:
+        return self._token
+
+    def clear(self) -> None:
+        self._token = None
+
+
 def get_box_client():
     """
-    Create Box client using Client Credentials Grant (CCG).
-    Tokens auto-refresh - no manual intervention needed.
+    Create Box client using OAuth 2.0 with refresh tokens.
+    Tokens auto-refresh when they expire.
 
-    Required secrets in .streamlit/secrets.toml:
+    Required secrets:
         [box]
         client_id = "your_client_id"
         client_secret = "your_client_secret"
-        user_id = "your_user_id"
+        refresh_token = "your_refresh_token"
     """
-    config = CCGConfig(
+    token_storage = InMemoryTokenStorage(
+        refresh_token=st.secrets["box"]["refresh_token"]
+    )
+
+    config = OAuthConfig(
         client_id=st.secrets["box"]["client_id"],
         client_secret=st.secrets["box"]["client_secret"],
-        user_id=st.secrets["box"]["user_id"],
+        token_storage=token_storage,
     )
-    auth = BoxCCGAuth(config=config)
+    auth = BoxOAuth(config=config)
     return BoxClient(auth=auth)
 
 def get_users_csv(client: BoxClient):

@@ -8,7 +8,7 @@ import math
 import parselmouth as pm
 import matplotlib.pyplot as plt
 from parselmouth.praat import call as praat_call
-from box_sdk_gen import BoxClient, BoxDeveloperTokenAuth
+from box_sdk_gen import BoxClient, BoxCCGAuth, CCGConfig
 from box_sdk_gen.managers.uploads import UploadFileAttributes, UploadFileAttributesParentField, UploadFileVersionAttributes
 from box_sdk_gen.internal.utils import read_byte_stream
 import streamlit as st
@@ -18,8 +18,24 @@ from streamlit_advanced_audio import audix, WaveSurferOptions
 BASE_FOLDER_ID = "341557643428"
 CSV_FILENAME = "users.csv"
 
+@st.cache_resource
 def get_box_client():
-    auth = BoxDeveloperTokenAuth(token=st.secrets["box"]["developer_token"])
+    """
+    Create Box client using Client Credentials Grant (CCG).
+    Tokens auto-refresh - no manual intervention needed.
+
+    Required secrets in .streamlit/secrets.toml:
+        [box]
+        client_id = "your_client_id"
+        client_secret = "your_client_secret"
+        user_id = "your_user_id"
+    """
+    config = CCGConfig(
+        client_id=st.secrets["box"]["client_id"],
+        client_secret=st.secrets["box"]["client_secret"],
+        user_id=st.secrets["box"]["user_id"],
+    )
+    auth = BoxCCGAuth(config=config)
     return BoxClient(auth=auth)
 
 def get_users_csv(client: BoxClient):

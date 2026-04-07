@@ -1,9 +1,4 @@
 import streamlit as st
-import pandas as pd
-import io
-from box_sdk_gen import BoxClient, BoxDeveloperTokenAuth
-from box_sdk_gen.managers.uploads import UploadFileAttributes, UploadFileAttributesParentField, UploadFileVersionAttributes
-from box_sdk_gen.internal.utils import read_byte_stream
 
 
 # Import tabs (modes)

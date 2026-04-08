@@ -28,13 +28,13 @@ def get_box_client() -> BoxClient:
         [box]
         client_id = "your_client_id"
         client_secret = "your_client_secret"
-        user_id = "your_user_id"
+        enterprise_id = "your_enterprise_id"
     """
     try:
         ccg_config = CCGConfig(
             client_id=st.secrets["box"]["client_id"],
             client_secret=st.secrets["box"]["client_secret"],
-            user_id=st.secrets["box"]["user_id"]
+            enterprise_id=st.secrets["box"]["enterprise_id"]
         )
         auth = BoxCCGAuth(config=ccg_config)
         return BoxClient(auth=auth)

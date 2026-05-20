@@ -15,8 +15,8 @@ from split_audio_trend_mode import split_audio_trend_tab
 from analysis_utils import *
 
 # ---------------- Global Config ----------------
-st.set_page_config(page_title="BLab Anaysis Tool")
-st.title("BLab Acoustic Analysis Dashboard")
+st.set_page_config(page_title="LIS-N Prototype")
+st.title("LIS-N Prototype Dashboard")
 st.caption("Backend processing with PRAAT")
 
 
